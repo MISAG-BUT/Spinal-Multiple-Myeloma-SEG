@@ -3,3 +3,6 @@
 *.pth
 *.png
 *.spydata
+*.idea
+/DATA
+/nnUNet
