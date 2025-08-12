@@ -1,0 +1,10 @@
+Download Python 3.13.x:
+https://www.python.org/downloads/
+We have used Python 3.13.5
+
+Install Python and add it to the PATH
+use cd to navigate to the desired folder where the venv should be created
+cd "F:\Spinal-Multiple-Myeloma-SEG"
+
+
+
