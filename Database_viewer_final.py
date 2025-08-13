@@ -44,7 +44,7 @@ if __name__ == "__main__":
             DICOM_folders_all.append(filename)
     print(DICOM_folders_all)
     
-    # %% Load DICOM files
+    # Load DICOM files
     for DICOM_folder in DICOM_folders_all:
         DICOM_folder_path=join(patient_main_file,DICOM_folder)
         # Loading all DICOM files from the directory, skipping the DIRFILE file
@@ -70,14 +70,14 @@ if __name__ == "__main__":
             patient_name = series_description[:8]
             
     
-    # %% Load Masks
+    #Load Masks
     path_spine_mask = join(path_to_segmentations, patient_name,patient_name + '_spine_segmentation.nii.gz')
     path_lesion_mask = join(path_to_segmentations, patient_name,patient_name + '_lesions_segmentation.nii.gz')
     
     SegmMaskSpine = sitk.GetArrayFromImage(sitk.ReadImage(path_spine_mask))
     SegmMaskLesions = sitk.GetArrayFromImage(sitk.ReadImage(path_lesion_mask))
     
-    #%% Run napari
+    #Run napari
     v = napari.Viewer()  
     ConvCT_layer = v.add_image(ConvCT_zxy, name='ConvCT')       
     ConvCT_layer.colormap = 'gray'
