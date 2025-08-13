@@ -26,6 +26,7 @@ def load_DICOM_data_SITK(path_to_series):
     
     
 #%%
+
 if __name__ == "__main__":
        
     #%%
