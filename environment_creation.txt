@@ -27,7 +27,9 @@ pip install -e .
 pip install pydicom
 pip install napari
 
+set nnUNet_raw=E:\nnUNet_v2_MAIN_FILE\nnUNet_raw
+set nnUNet_preprocessed=E:\nnUNet_v2_MAIN_FILE\nnUNet_preprocessed
+set nnUNet_results=F:\Spinal-Multiple-Myeloma-SEG_nnUNet_models
 
 
-
-
+set nnUNet_results=E:\nnUNet_v2_MAIN_FILE\nnUNet_results
