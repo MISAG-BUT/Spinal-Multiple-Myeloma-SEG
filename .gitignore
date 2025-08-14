@@ -4,6 +4,7 @@
 *.png
 *.spydata
 *.idea
+*.json
 /DATA
 /nnUNet
 /DATA_output
