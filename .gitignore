@@ -6,3 +6,4 @@
 *.idea
 /DATA
 /nnUNet
+/DATA_output

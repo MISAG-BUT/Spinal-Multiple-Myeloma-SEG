@@ -9,21 +9,22 @@ import os
 join=os.path.join
 import pydicom
 import napari
+from functions import load_DICOM_data_SITK
 
 
-def load_DICOM_data_SITK(path_to_series):
-    # Load all DICOM images into a 3D volume
-    dicom_series_reader = sitk.ImageSeriesReader()
-    # Get the list of DICOM file names in the specified directory
-    dicom_filenames = dicom_series_reader.GetGDCMSeriesFileNames(path_to_series)
-    # Set the list of files to be read
-    dicom_series_reader.SetFileNames(dicom_filenames)
-    # Read the 3D image from the DICOM series
-    image_3d = dicom_series_reader.Execute()
-    # Convert the 3D image to a NumPy array (z, y, x)
-    img_data = sitk.GetArrayFromImage(image_3d)
-    return img_data
-    
+# def load_DICOM_data_SITK(path_to_series):
+#     # Load all DICOM images into a 3D volume
+#     dicom_series_reader = sitk.ImageSeriesReader()
+#     # Get the list of DICOM file names in the specified directory
+#     dicom_filenames = dicom_series_reader.GetGDCMSeriesFileNames(path_to_series)
+#     # Set the list of files to be read
+#     dicom_series_reader.SetFileNames(dicom_filenames)
+#     # Read the 3D image from the DICOM series
+#     image_3d = dicom_series_reader.Execute()
+#     # Convert the 3D image to a NumPy array (z, y, x)
+#     img_data = sitk.GetArrayFromImage(image_3d)
+#     return img_data
+      
     
 #%%
 
