@@ -105,6 +105,7 @@ if __name__ == "__main__":
     CaSupp25_layer.blending = 'additive'
     CaSupp25_layer.visible = False
     
+    
     CaSupp50_layer = v.add_image(CaSupp50_zxy, name='CaSupp50')       
     CaSupp50_layer.colormap = 'gray'
     CaSupp50_layer.blending = 'additive'
