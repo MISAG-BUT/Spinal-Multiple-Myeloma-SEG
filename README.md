@@ -92,7 +92,10 @@ pip install pydicom napari
 Always replace <path-to-your-python-executable> with the correct path on your system. For different CUDA versions or CPU-only setups, check the [PyTorch installation guide](https://pytorch.org/get-started/locally/)
 .
 
+## Citation
 
+If you use this code in your research, please cite our paper:
+TO DO
 
 
 
