@@ -19,6 +19,8 @@ import nibabel as nib
 from nibabel import io_orientation
 import numpy as np
 import shutil
+import json
+from json import JSONEncoder
 
 def maybe_mkdir_p(directory: str) -> None:
     os.makedirs(directory, exist_ok=True)
@@ -166,3 +168,25 @@ def revert_reorientation(image: str) -> None:
                                                                  'aborting!'
     nib.save(img, image)
     os.remove(expected_pkl)
+
+
+def get_3d_bounding_box_padding(array, padding=0):
+    indices = np.argwhere(array != 0)
+
+    if len(indices) == 0:
+        return None
+
+    min_coords = np.min(indices, axis=0)
+    max_coords = np.max(indices, axis=0)
+
+    # Přidání paddingu a zajištění, že indexy zůstanou v platném rozsahu
+    min_coords = np.maximum(min_coords - padding, 0)
+    max_coords = np.minimum(max_coords + padding, np.array(array.shape) - 1)
+
+    return min_coords, max_coords
+
+class NumpyArrayEncoder(JSONEncoder):
+    def default(self, obj):
+        if isinstance(obj, np.ndarray):
+            return obj.tolist()
+        return JSONEncoder.default(self, obj)
