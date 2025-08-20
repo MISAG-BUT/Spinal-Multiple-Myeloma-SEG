@@ -3,11 +3,17 @@
 ## Overview
 Welcome to the repository for the paper **"Spinal-Multiple-Myeloma-SEG"**! This repository provides the code for the implementation of the networks for segmentation within the popular [nnUNet framework](https://github.com/MIC-DKFZ/nnUNet).
 
+The repository contains two main scripts:  
+1. A script for visualizing the dataset, allowing you to explore the spinal and myeloma images used.  
+2. A script for performing segmentation predictions on the spine and myeloma regions. These predictions were utilized to create the myeloma database used in the study.  
+
+Together, these scripts allow researchers to reproduce the dataset preparation and segmentation workflows described in the paper.
+
+
 ## Usage
 ### Installation
 
-### Environment Setup for nnUNet Prediction (Python 3.13)
-
+Environment Setup for nnUNet Prediction (Python 3.13)
 This guide explains how to set up the environment for running predictions with [nnUNet](https://github.com/MIC-DKFZ/nnUNet) on the [Spinal-Multiple-Myeloma-SEG](https://github.com/MISAG-BUT/Spinal-Multiple-Myeloma-SEG) project.
 Check out the official [nnUNet installation instructions](https://github.com/MIC-DKFZ/nnUNet/blob/master/documentation/installation_instructions.md)
 
