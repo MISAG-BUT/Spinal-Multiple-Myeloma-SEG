@@ -6,7 +6,7 @@ Welcome to the repository for the paper **"Spinal-Multiple-Myeloma-SEG"**! This 
 ## Usage
 ### Installation
 
-# Environment Setup for nnUNet Prediction (Python 3.13)
+### Environment Setup for nnUNet Prediction (Python 3.13)
 
 This guide explains how to set up the environment for running predictions with [nnUNet](https://github.com/MIC-DKFZ/nnUNet) on the [Spinal-Multiple-Myeloma-SEG](https://github.com/MISAG-BUT/Spinal-Multiple-Myeloma-SEG) project.
 Check out the official [nnUNet installation instructions](https://github.com/MIC-DKFZ/nnUNet/blob/master/documentation/installation_instructions.md)
