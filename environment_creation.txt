@@ -8,6 +8,8 @@ cd "F:\Spinal-Multiple-Myeloma-SEG"
 
 creation of virtual environment
 "C:\Users\nohel\AppData\Local\Programs\Python\Python313\python.exe" -m venv venv_run_nnUNet_prediction
+/home/nohel/miniconda3/bin/python3 -m venv venv_run_nnUNet_prediction
+
 
 Aktivate prostředí:
 venv_run_nnUNet_prediction\Scripts\activate
