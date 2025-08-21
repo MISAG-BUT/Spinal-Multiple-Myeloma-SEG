@@ -164,7 +164,7 @@ if __name__ == "__main__":
     full_size_mask[min_coords[0]:max_coords[0]+1, min_coords[1]:max_coords[1]+1, min_coords[2]:max_coords[2]+1]=predicted_mask_data
     #save full size image
     Lesion_segmentation_folder = join(working_folder_Segmentation,'Lesion_segmentation')
-    maybe_mkdir_p(crop_parameters_folder)
+    maybe_mkdir_p(Lesion_segmentation_folder)
     pom_full_size_mask = nib.Nifti1Image(full_size_mask, vmi_40kev.affine, vmi_40kev.header)
     nib.save(pom_full_size_mask, join(Lesion_segmentation_folder, patient_name + '_lesions_segmentation.nii.gz'))
 
