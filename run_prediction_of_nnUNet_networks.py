@@ -23,14 +23,20 @@ import numpy as np
 
 
 if __name__ == "__main__":    
+    # Set paths to data and models
     base = 'F:/Spinal-Multiple-Myeloma-SEG/DATA' #windows
     #base = '/mnt/md0/nohel/Spinal-Multiple-Myeloma-SEG/DATA' #Linux
     split_data = True
+    nnUNet_results = "F:/Spinal-Multiple-Myeloma-SEG_nnUNet_models" # windows
+    #nnUNet_results = "/mnt/md0/nohel/Spinal-Multiple-Myeloma-SEG_nnUNet_models" # Linux
 
     # Find convCT and VMI40 image and convert it to nifti
     ID_patient="S840"
     patient_main_file=join(base,ID_patient)
     path_to_output_folder = base + "_output"
+    
+
+    # 
     
     DICOM_folders_all = []
     # Browse files in a directory and save individual folders
@@ -88,8 +94,7 @@ if __name__ == "__main__":
     dataset_name = "Dataset802_Spine_segmentation_trained_on_VerSe20_and_MM_dataset_together"
     trainer_name = "nnUNetTrainer__nnUNetPlans__3d_fullres"
     use_folds = ('all',)
-    nnUNet_results = "F:/Spinal-Multiple-Myeloma-SEG_nnUNet_models" # windows
-    #nnUNet_results = "/mnt/md0/nohel/Spinal-Multiple-Myeloma-SEG_nnUNet_models" # Linux
+    
     #run_nnunet_inference(nnUNet_results, dataset_name, trainer_name, use_folds, input_folder, output_folder) 
     print('Spine segmentation - End of prediction with nnUNet')
 
