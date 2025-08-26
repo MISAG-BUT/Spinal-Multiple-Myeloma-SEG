@@ -9,7 +9,7 @@ import os
 #sys.path.append(os.path.abspath('F:/Spinal-Multiple-Myeloma-SEG/nnUNet'))#windows
 sys.path.append(os.path.abspath('/mnt/md0/nohel/Spinal-Multiple-Myeloma-SEG')) #Linux
 from nnunetv2.paths import nnUNet_results, nnUNet_raw, nnUNet_preprocessed
-from functions import create_working_folders_and_convert_to_nifti, run_nnunet_inference, maybe_mkdir_p, revert_orientation_on_all_images_in_folder, get_3d_bounding_box_padding, NumpyArrayEncoder
+from functions import create_working_folders_and_convert_to_nifti, run_nnunet_inference, maybe_mkdir_p, revert_orientation_on_all_images_in_folder, get_3d_bounding_box_padding, NumpyArrayEncoder, split_convCT_data
 import shutil
 import os
 join=os.path.join
@@ -19,10 +19,57 @@ import nibabel as nib
 import json
 import numpy as np
 
-if __name__ == "__main__":    
-    #base = 'F:/Spinal-Multiple-Myeloma-SEG/DATA' #windows
-    base = '/mnt/md0/nohel/Spinal-Multiple-Myeloma-SEG/DATA' #Linux
+def merge_data(working_output_folder_for_spine_segmentation, working_folder_Spine_segmentation_in_RAS, patient_name):
+    # Cesty k dílčím obrazům
+    upper_path = join(working_output_folder_for_spine_segmentation, patient_name + '_conv_RAS_upperZ.nii.gz')
+    lower_path = join(working_output_folder_for_spine_segmentation, patient_name + '_conv_RAS_lowerZ.nii.gz')
+
+    # Načtení obrazů
+    upper_img = sitk.ReadImage(upper_path)
+    lower_img = sitk.ReadImage(lower_path)
+
+    # Konverze na numpy
+    upper_arr = sitk.GetArrayFromImage(upper_img)  # (Z1, Y, X)
+    lower_arr = sitk.GetArrayFromImage(lower_img)  # (Z2, Y, X)
+
+    # Spojení podél osy Z
+    merged_arr = np.concatenate([upper_arr, lower_arr], axis=0)
+
+    # Nový SimpleITK obraz
+    merged_img = sitk.GetImageFromArray(merged_arr)
+
+    # Metadata ze začátku (horní blok má správný origin jako původní)
+    merged_img.SetSpacing(upper_img.GetSpacing())
+    merged_img.SetDirection(upper_img.GetDirection())
+    merged_img.SetOrigin(upper_img.GetOrigin())
+
+    maybe_mkdir_p(working_folder_Spine_segmentation_in_RAS)
+
+    # Uložit výsledek
+    sitk.WriteImage(merged_img, join(working_folder_Spine_segmentation_in_RAS, patient_name + '_conv_RAS.nii.gz'))
     
+
+def reorient_data_to_original_space(working_folder_Spine_segmentation_final,working_folder_Spine_segmentation_in_RAS):
+    maybe_mkdir_p(working_folder_Spine_segmentation_final)
+
+    for filename in os.listdir(working_folder_Spine_segmentation_in_RAS):
+        if filename.endswith(".nii.gz"):
+            src_path = os.path.join(working_folder_Spine_segmentation_in_RAS, filename)
+            dst_path = os.path.join(working_folder_Spine_segmentation_final, filename[:8] + '_spine_segmentation.nii.gz')
+            shutil.copy(src_path, dst_path)
+
+    for filename in os.listdir(working_folder_conv_CT_in_RAS):
+        if filename.endswith("originalAffine.pkl"):
+            src_path = os.path.join(working_folder_conv_CT_in_RAS, filename)
+            dst_path = os.path.join(working_folder_Spine_segmentation_final, filename[:8] + '_spine_segmentation_originalAffine.pkl')
+            shutil.copy(src_path, dst_path)
+
+    revert_orientation_on_all_images_in_folder(working_folder_Spine_segmentation_final,1)
+
+if __name__ == "__main__":    
+    base = 'F:/Spinal-Multiple-Myeloma-SEG/DATA' #windows
+    #base = '/mnt/md0/nohel/Spinal-Multiple-Myeloma-SEG/DATA' #Linux
+    split_data = True
 
     # Find convCT and VMI40 image and convert it to nifti
     ID_patient="S840"
@@ -55,47 +102,51 @@ if __name__ == "__main__":
     working_folder = join(path_to_output_folder,name_of_output_folder) 
     working_folder_conv_CT = join(working_folder,'Conv_CT')
     working_folder_conv_CT_in_RAS = join(working_folder,'Conv_CT_in_RAS')
+    working_folder_conv_CT_in_RAS_cropped = join(working_folder,'Conv_CT_in_RAS_cropped')
     working_folder_VMI40 = join(working_folder,'VMI40')
     working_folder_VMI40_cropped = join(working_folder,'VMI40_cropped')
     working_folder_Segmentation = join(working_folder,'Segmentation') 
-    #create_working_folders_and_convert_to_nifti(patient_name, working_folder, working_folder_conv_CT, working_folder_conv_CT_in_RAS, working_folder_VMI40, working_folder_VMI40_cropped, working_folder_Segmentation, path_to_convCT_folder, path_to_VMI40_folder)
+    #create_working_folders_and_convert_to_nifti(patient_name, working_folder, working_folder_conv_CT, working_folder_conv_CT_in_RAS, working_folder_conv_CT_in_RAS_cropped, working_folder_VMI40, working_folder_VMI40_cropped, working_folder_Segmentation, path_to_convCT_folder, path_to_VMI40_folder)
+
+
+    working_folder_Spine_segmentation_final = join(working_folder_Segmentation,'Spine_segmentation_final') 
+    working_folder_Spine_segmentation_in_RAS = join(working_folder_Segmentation,'Spine_segmentation_in_RAS') 
+    working_folder_Spine_segmentation_in_RAS_cropped = join(working_folder_Segmentation,'Spine_segmentation_in_RAS_cropped')
+
+    split_data = True
+    if split_data:
+        #split_convCT_data(working_folder_conv_CT_in_RAS, working_folder_conv_CT_in_RAS_cropped, patient_name)
+        working_input_folder_for_spine_segmentation = working_folder_conv_CT_in_RAS_cropped
+        working_output_folder_for_spine_segmentation = working_folder_Spine_segmentation_in_RAS_cropped
+    else:
+        working_input_folder_for_spine_segmentation = working_folder_conv_CT_in_RAS
+        working_output_folder_for_spine_segmentation = working_folder_Spine_segmentation_in_RAS
 
     
-    
     # %% Segmentation of spine with nnUNet        
-    input_folder = working_folder_conv_CT_in_RAS + "_cropped"
-    output_folder = join(working_folder_Segmentation,'Spine_segmentation_in_RAS')
+    input_folder = working_input_folder_for_spine_segmentation
+    output_folder = working_output_folder_for_spine_segmentation
     dataset_name = "Dataset802_Spine_segmentation_trained_on_VerSe20_and_MM_dataset_together"
     trainer_name = "nnUNetTrainer__nnUNetPlans__3d_fullres"
     use_folds = ('all',)
-    #nnUNet_results = "F:/Spinal-Multiple-Myeloma-SEG_nnUNet_models" # windows
-    nnUNet_results = "/mnt/md0/nohel/Spinal-Multiple-Myeloma-SEG_nnUNet_models" # Linux
-    run_nnunet_inference(nnUNet_results, dataset_name, trainer_name, use_folds, input_folder, output_folder) 
+    nnUNet_results = "F:/Spinal-Multiple-Myeloma-SEG_nnUNet_models" # windows
+    #nnUNet_results = "/mnt/md0/nohel/Spinal-Multiple-Myeloma-SEG_nnUNet_models" # Linux
+    #run_nnunet_inference(nnUNet_results, dataset_name, trainer_name, use_folds, input_folder, output_folder) 
+
+    merge_data(working_output_folder_for_spine_segmentation, working_folder_Spine_segmentation_in_RAS, patient_name)
+
+    # %% reorient spine segmentation to original space
+    reorient_data_to_original_space(working_folder_Spine_segmentation_final,working_folder_Spine_segmentation_in_RAS)
 
 
-    # %% reorient spine segmetnation to original space
-    spine_segmentation_in_original_orientation = join(working_folder_Segmentation,'Spine_segmentation')
-    maybe_mkdir_p(spine_segmentation_in_original_orientation)
 
-    for filename in os.listdir(output_folder):
+
+
+
+
+    for filename in os.listdir(working_folder_Spine_segmentation_final):
         if filename.endswith(".nii.gz"):
-            src_path = os.path.join(output_folder, filename)
-            dst_path = os.path.join(spine_segmentation_in_original_orientation, filename[:8] + '_spine_segmentation.nii.gz')
-            shutil.copy(src_path, dst_path)
-
-    for filename in os.listdir(working_folder_conv_CT_in_RAS):
-        if filename.endswith("originalAffine.pkl"):
-            src_path = os.path.join(working_folder_conv_CT_in_RAS, filename)
-            dst_path = os.path.join(spine_segmentation_in_original_orientation, filename[:8] + '_spine_segmentation_originalAffine.pkl')
-            shutil.copy(src_path, dst_path)
-
-
-
-    revert_orientation_on_all_images_in_folder(spine_segmentation_in_original_orientation,1)
-
-    for filename in os.listdir(spine_segmentation_in_original_orientation):
-        if filename.endswith(".nii.gz"):
-            spine_segmentation_path = os.path.join(spine_segmentation_in_original_orientation, filename)
+            spine_segmentation_path = os.path.join(working_folder_Spine_segmentation_final, filename)
             patient_name = filename[:8]
             break 
 
