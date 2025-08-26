@@ -40,7 +40,7 @@ def subfiles(folder: str, join: bool = True, prefix: str = None, suffix: str = N
 def run_nnunet_inference(nnUNet_results, dataset_name, trainer_name, use_folds, input_folder, output_folder):  
     # instantiate the nnUNetPredictor
     predictor = nnUNetPredictor(
-        tile_step_size=0.5,
+        tile_step_size=1,
         use_gaussian=True,
         use_mirroring=False,
         perform_everything_on_device=True,
@@ -60,8 +60,14 @@ def run_nnunet_inference(nnUNet_results, dataset_name, trainer_name, use_folds, 
     predictor.predict_from_files(input_folder,
                                   output_folder,
                                   save_probabilities=False, overwrite=False,
-                                  num_processes_preprocessing=4, num_processes_segmentation_export=8,
+                                  num_processes_preprocessing=1, num_processes_segmentation_export=1,
                                   folder_with_segs_from_prev_stage=None, num_parts=1, part_id=0)
+    
+    # variant 1: give input and output folders
+    #predictor.predict_from_files_sequential(input_folder,
+    #                                        output_folder,
+    #                                        save_probabilities=False, overwrite=False,
+    #                                        folder_with_segs_from_prev_stage=None)
 
 
 def load_DICOM_data_SITK(path_to_series):
@@ -99,6 +105,49 @@ def create_working_folders_and_convert_to_nifti(patient_name, working_folder, wo
     
     shutil.copy(output_nifti_path, join(working_folder_conv_CT_in_RAS, patient_name + '_conv_RAS_0000.nii.gz'))
     reorient_all_images_in_folder_to_ras(working_folder_conv_CT_in_RAS,1)
+
+    # Načíst RAS obraz
+    ras_image_path = join(working_folder_conv_CT_in_RAS, patient_name + '_conv_RAS_0000.nii.gz')
+    ras_image = sitk.ReadImage(ras_image_path)
+
+    # Převést na numpy pole
+    ras_array = sitk.GetArrayFromImage(ras_image)  # tvar (Z, Y, X)
+
+    # Rozdělit podle Z (první osa)
+    mid_z = ras_array.shape[0] // 2
+    upper_array = ras_array[:mid_z, :, :]   # první půlka (horní část)
+    lower_array = ras_array[mid_z:, :, :]   # druhá půlka (spodní část)
+
+    # Vytvořit SITK obrazy
+    upper_img = sitk.GetImageFromArray(upper_array)
+    lower_img = sitk.GetImageFromArray(lower_array)
+
+    # Zkopírovat metadata
+    spacing = ras_image.GetSpacing()
+    direction = ras_image.GetDirection()
+    origin = ras_image.GetOrigin()
+
+    # Nastavit metadata pro horní půlku
+    upper_img.SetSpacing(spacing)
+    upper_img.SetDirection(direction)
+    upper_img.SetOrigin(origin)
+
+    # Nastavit metadata pro spodní půlku
+    lower_img.SetSpacing(spacing)
+    lower_img.SetDirection(direction)
+
+    # Posunout origin ve směru Z
+    lower_origin = list(origin)
+    lower_origin[2] = origin[2] + mid_z * spacing[2]  # posun ve směru Z
+    lower_img.SetOrigin(lower_origin)
+
+
+    working_folder_conv_CT_in_RAS_cropped = working_folder_conv_CT_in_RAS + "_cropped" 
+    maybe_mkdir_p(working_folder_conv_CT_in_RAS_cropped)
+
+    # Uložit nové NIfTI soubory
+    sitk.WriteImage(upper_img, join(working_folder_conv_CT_in_RAS_cropped, patient_name + '_conv_RAS_upperZ_0000.nii.gz'))
+    sitk.WriteImage(lower_img, join(working_folder_conv_CT_in_RAS_cropped, patient_name + '_conv_RAS_lowerZ_0000.nii.gz'))
 
 
     # Vytvoření čtečky DICOM série
