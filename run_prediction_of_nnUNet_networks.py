@@ -58,14 +58,14 @@ if __name__ == "__main__":
     working_folder_VMI40 = join(working_folder,'VMI40')
     working_folder_VMI40_cropped = join(working_folder,'VMI40_cropped')
     working_folder_Segmentation = join(working_folder,'Segmentation') 
-    create_working_folders_and_convert_to_nifti(patient_name, working_folder, working_folder_conv_CT, working_folder_conv_CT_in_RAS, working_folder_VMI40, working_folder_VMI40_cropped, working_folder_Segmentation, path_to_convCT_folder, path_to_VMI40_folder)
+    #create_working_folders_and_convert_to_nifti(patient_name, working_folder, working_folder_conv_CT, working_folder_conv_CT_in_RAS, working_folder_VMI40, working_folder_VMI40_cropped, working_folder_Segmentation, path_to_convCT_folder, path_to_VMI40_folder)
 
     
-
+    
     # %% Segmentation of spine with nnUNet        
-    input_folder = working_folder_conv_CT_in_RAS 
+    input_folder = working_folder_conv_CT_in_RAS + "_cropped"
     output_folder = join(working_folder_Segmentation,'Spine_segmentation_in_RAS')
-    dataset_name = "Dataset801_Spine_segmentation_trained_on_VerSe20"
+    dataset_name = "Dataset802_Spine_segmentation_trained_on_VerSe20_and_MM_dataset_together"
     trainer_name = "nnUNetTrainer__nnUNetPlans__3d_fullres"
     use_folds = ('all',)
     #nnUNet_results = "F:/Spinal-Multiple-Myeloma-SEG_nnUNet_models" # windows
@@ -76,6 +76,7 @@ if __name__ == "__main__":
     # %% reorient spine segmetnation to original space
     spine_segmentation_in_original_orientation = join(working_folder_Segmentation,'Spine_segmentation')
     maybe_mkdir_p(spine_segmentation_in_original_orientation)
+
     for filename in os.listdir(output_folder):
         if filename.endswith(".nii.gz"):
             src_path = os.path.join(output_folder, filename)
