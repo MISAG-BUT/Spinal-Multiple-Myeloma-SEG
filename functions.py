@@ -21,6 +21,32 @@ import numpy as np
 import shutil
 import json
 from json import JSONEncoder
+import pydicom
+
+def find_convCT_and_VMI40_at_DICOM_folder(patient_main_file):
+    DICOM_folders_all = []
+    # Browse files in a directory and save individual folders
+    for filename in os.listdir(patient_main_file):
+        if filename.startswith('S20'):
+            DICOM_folders_all.append(filename)
+    
+    #print(DICOM_folders_all)
+    print('Searching of convCT and VMI40 data')
+    # Load DICOM files
+    for DICOM_folder in DICOM_folders_all:
+        DICOM_folder_path=join(patient_main_file,DICOM_folder)
+        # Loading all DICOM files from the directory, skipping the DIRFILE file
+        DICOM_files = [os.path.join(DICOM_folder_path, f) for f in os.listdir(DICOM_folder_path) if f != 'DIRFILE']
+        series_description = pydicom.dcmread(DICOM_files[0]).get('SeriesDescription')
+        #print(series_description)
+        if series_description.endswith("_konv"):
+            path_to_convCT_folder = DICOM_folder_path
+            patient_name = series_description[:8]
+        elif series_description=='MonoE 40keV[HU]':
+            path_to_VMI40_folder = DICOM_folder_path
+        else:
+            continue
+    return patient_name,path_to_convCT_folder,path_to_VMI40_folder
 
 def maybe_mkdir_p(directory: str) -> None:
     os.makedirs(directory, exist_ok=True)
