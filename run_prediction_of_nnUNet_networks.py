@@ -15,25 +15,14 @@ os.environ["nnUNet_results"] = r"nnUNet_project\nnUNet_results"
 #sys.path.append(os.path.abspath('F:/Spinal-Multiple-Myeloma-SEG/nnUNet'))#windows
 sys.path.append(os.path.abspath('/mnt/md0/nohel/Spinal-Multiple-Myeloma-SEG')) #Linux
 from nnunetv2.paths import nnUNet_results, nnUNet_raw, nnUNet_preprocessed
-from functions import * 
+from utils import * 
 
-
-
-if __name__ == "__main__":    
-    # Set paths to data and models
-    base = 'F:/Spinal-Multiple-Myeloma-SEG/DATA' #windows
-    #base = '/mnt/md0/nohel/Spinal-Multiple-Myeloma-SEG/DATA' #Linux
-    split_data = True
-    nnUNet_results = "F:/Spinal-Multiple-Myeloma-SEG_nnUNet_models" # windows
-    #nnUNet_results = "/mnt/md0/nohel/Spinal-Multiple-Myeloma-SEG_nnUNet_models" # Linux
-
-    # Find convCT and VMI40 image and convert it to nifti
-    ID_patient="S840"
+def main(base, ID_patient, nnUNet_results, split_data=True):
     patient_main_file=join(base,ID_patient)
     path_to_output_folder = base + "_output"
     
 
-    # 
+    # Find convCT and VMI40 image and convert it to nifti
     patient_name, path_to_convCT_folder, path_to_VMI40_folder = find_convCT_and_VMI40_at_DICOM_folder(patient_main_file)
     
     
@@ -59,7 +48,7 @@ if __name__ == "__main__":
     working_folder_Spine_segmentation_in_RAS_cropped = join(working_folder_Segmentation,'Spine_segmentation_in_RAS_cropped')
 
     if split_data:
-        #split_convCT_data(working_folder_conv_CT_in_RAS, working_folder_conv_CT_in_RAS_cropped, patient_name)
+        split_convCT_data(working_folder_conv_CT_in_RAS, working_folder_conv_CT_in_RAS_cropped, patient_name)
         working_input_folder_for_spine_segmentation = working_folder_conv_CT_in_RAS_cropped
         working_output_folder_for_spine_segmentation = working_folder_Spine_segmentation_in_RAS_cropped
     else:
@@ -72,21 +61,19 @@ if __name__ == "__main__":
     output_folder = working_output_folder_for_spine_segmentation
     dataset_name = "Dataset802_Spine_segmentation_trained_on_VerSe20_and_MM_dataset_together"
     trainer_name = "nnUNetTrainer__nnUNetPlans__3d_fullres"
-    use_folds = ('all',)
+    use_folds = ('all',)    
+    run_nnunet_inference(nnUNet_results, dataset_name, trainer_name, use_folds, input_folder, output_folder) 
     
-    #run_nnunet_inference(nnUNet_results, dataset_name, trainer_name, use_folds, input_folder, output_folder) 
     print('Spine segmentation - End of prediction with nnUNet')
 
     print('Spine segmentation - reorientation of segmentation to original space ')
     if split_data:
         print('Spine segmentation - Merging of data ')
-        #merge_data(working_output_folder_for_spine_segmentation, working_folder_Spine_segmentation_in_RAS, patient_name)
+        merge_data(working_output_folder_for_spine_segmentation, working_folder_Spine_segmentation_in_RAS, patient_name)
 
     # %% reorient spine segmentation to original space
     reorient_spine_segmentation_to_original_space(working_folder_Spine_segmentation_final,working_folder_Spine_segmentation_in_RAS, working_folder_conv_CT_in_RAS)
     print('Spine segmentation - Done ')
-
-
 
 
 
@@ -117,6 +104,27 @@ if __name__ == "__main__":
     reorient_lesion_segmentation_to_original_space(working_folder_crop_parameters_folder, working_folder_VMI40, working_folder_Lesion_segmentation_cropped, working_folder_Lesion_segmentation_final, patient_name)
     print('Lession segmentation - Done ')
 
+
+if __name__ == "__main__":    
+    # Set paths to data and models
+    #base = 'F:/Spinal-Multiple-Myeloma-SEG/DATA' #windows
+    base = '/mnt/md0/nohel/Spinal-Multiple-Myeloma-SEG/DATA' #Linux
+
+    #nnUNet_results = "F:/Spinal-Multiple-Myeloma-SEG_nnUNet_models" # windows
+    nnUNet_results = "/mnt/md0/nohel/Spinal-Multiple-Myeloma-SEG_nnUNet_models" # Linux
+
+    
+    ID_patient="S840"   # name of folder with all DICOM folders for one patient
+
+
+   
+    split_data = True   #If set to True, the original image is split into two parts along the Z-axis 
+                        # to reduce computational cost, and later recombined after processing.  
+                        # If set to False, prediction is performed on the entire image at once, 
+                        # which requires ~256 GB of RAM.
+
+    
+    main(base, ID_patient, nnUNet_results, split_data=True)
 
 
 

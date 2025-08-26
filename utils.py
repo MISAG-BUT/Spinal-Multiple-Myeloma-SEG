@@ -66,7 +66,7 @@ def subfiles(folder: str, join: bool = True, prefix: str = None, suffix: str = N
 def run_nnunet_inference(nnUNet_results, dataset_name, trainer_name, use_folds, input_folder, output_folder):  
     # instantiate the nnUNetPredictor
     predictor = nnUNetPredictor(
-        tile_step_size=1,
+        tile_step_size=0.5,
         use_gaussian=True,
         use_mirroring=False,
         perform_everything_on_device=True,
