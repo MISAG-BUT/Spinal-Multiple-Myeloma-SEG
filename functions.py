@@ -239,3 +239,120 @@ def split_convCT_data (working_folder_conv_CT_in_RAS, working_folder_conv_CT_in_
     # Uložit nové NIfTI soubory
     sitk.WriteImage(upper_img, join(working_folder_conv_CT_in_RAS_cropped, patient_name + '_conv_RAS_upperZ_0000.nii.gz'))
     sitk.WriteImage(lower_img, join(working_folder_conv_CT_in_RAS_cropped, patient_name + '_conv_RAS_lowerZ_0000.nii.gz'))
+
+
+def merge_data(working_output_folder_for_spine_segmentation, working_folder_Spine_segmentation_in_RAS, patient_name):
+    # Cesty k dílčím obrazům
+    upper_path = join(working_output_folder_for_spine_segmentation, patient_name + '_conv_RAS_upperZ.nii.gz')
+    lower_path = join(working_output_folder_for_spine_segmentation, patient_name + '_conv_RAS_lowerZ.nii.gz')
+
+    # Načtení obrazů
+    upper_img = sitk.ReadImage(upper_path)
+    lower_img = sitk.ReadImage(lower_path)
+
+    # Konverze na numpy
+    upper_arr = sitk.GetArrayFromImage(upper_img)  # (Z1, Y, X)
+    lower_arr = sitk.GetArrayFromImage(lower_img)  # (Z2, Y, X)
+
+    # Spojení podél osy Z
+    merged_arr = np.concatenate([upper_arr, lower_arr], axis=0)
+
+    # Nový SimpleITK obraz
+    merged_img = sitk.GetImageFromArray(merged_arr)
+
+    # Metadata ze začátku (horní blok má správný origin jako původní)
+    merged_img.SetSpacing(upper_img.GetSpacing())
+    merged_img.SetDirection(upper_img.GetDirection())
+    merged_img.SetOrigin(upper_img.GetOrigin())
+
+    maybe_mkdir_p(working_folder_Spine_segmentation_in_RAS)
+
+    # Uložit výsledek
+    sitk.WriteImage(merged_img, join(working_folder_Spine_segmentation_in_RAS, patient_name + '_conv_RAS.nii.gz'))
+    
+
+def reorient_spine_segmentation_to_original_space(working_folder_Spine_segmentation_final,working_folder_Spine_segmentation_in_RAS, working_folder_conv_CT_in_RAS):
+    maybe_mkdir_p(working_folder_Spine_segmentation_final)
+
+    for filename in os.listdir(working_folder_Spine_segmentation_in_RAS):
+        if filename.endswith(".nii.gz"):
+            src_path = os.path.join(working_folder_Spine_segmentation_in_RAS, filename)
+            dst_path = os.path.join(working_folder_Spine_segmentation_final, filename[:8] + '_spine_segmentation.nii.gz')
+            shutil.copy(src_path, dst_path)
+
+    for filename in os.listdir(working_folder_conv_CT_in_RAS):
+        if filename.endswith("originalAffine.pkl"):
+            src_path = os.path.join(working_folder_conv_CT_in_RAS, filename)
+            dst_path = os.path.join(working_folder_Spine_segmentation_final, filename[:8] + '_spine_segmentation_originalAffine.pkl')
+            shutil.copy(src_path, dst_path)
+
+    revert_orientation_on_all_images_in_folder(working_folder_Spine_segmentation_final,1)
+
+def prepare_data_for_lesion_segmentation(working_folder_Spine_segmentation_final, working_folder_crop_parameters_folder, working_folder_VMI40, working_folder_VMI40_cropped, patient_name):
+    for filename in os.listdir(working_folder_Spine_segmentation_final):
+        if filename.endswith(".nii.gz"):
+            spine_segmentation_path = os.path.join(working_folder_Spine_segmentation_final, filename)
+            patient_name = filename[:8]
+            break 
+
+    spine_segmentation = nib.load(spine_segmentation_path)
+    spine_segmentation_nii_img = spine_segmentation.get_fdata()
+    spine_segmentation_nii_img = spine_segmentation_nii_img.astype(bool) # maska obratlu nnUNet binarne 
+    
+    min_coords, max_coords = get_3d_bounding_box_padding(spine_segmentation_nii_img, 5)  # nalezeni BB pro 3D     
+    orig_size=spine_segmentation_nii_img.shape
+
+    maybe_mkdir_p(working_folder_crop_parameters_folder)
+
+    coordinates={'orig_size': orig_size, 'min_coords': min_coords,'max_coords': max_coords}    # uložení JSON souboru
+    with open(join(working_folder_crop_parameters_folder, patient_name + ".json"), "w") as f:
+        json.dump(coordinates, f, cls=NumpyArrayEncoder)
+
+    cut_nii_img = spine_segmentation_nii_img[min_coords[0]:max_coords[0]+1,
+                      min_coords[1]:max_coords[1]+1,
+                      min_coords[2]:max_coords[2]+1].copy()
+
+    pom_seg_nn_unet_binar = nib.Nifti1Image(cut_nii_img, spine_segmentation.affine, spine_segmentation.header)
+    nib.save(pom_seg_nn_unet_binar, join(working_folder_VMI40_cropped, patient_name + "_0001.nii.gz")) 
+
+
+    #VMI 40keV
+    vmi_40kev_path=join(working_folder_VMI40, patient_name + '_monoe_40kev_0000.nii.gz')
+    vmi_40kev = nib.load(vmi_40kev_path)
+    vmi_40kev_nii_img=vmi_40kev.get_fdata()
+    cut_nii_img = vmi_40kev_nii_img[min_coords[0]:max_coords[0]+1,
+                    min_coords[1]:max_coords[1]+1,
+                    min_coords[2]:max_coords[2]+1].copy()
+
+    pom_seg_nn_unet_binar = nib.Nifti1Image(cut_nii_img, spine_segmentation.affine, spine_segmentation.header)
+    nib.save(pom_seg_nn_unet_binar, join(working_folder_VMI40_cropped, patient_name + "_0000.nii.gz")) 
+
+
+def reorient_lesion_segmentation_to_original_space(working_folder_crop_parameters_folder, working_folder_VMI40, working_folder_Lesion_segmentation_cropped, working_folder_Lesion_segmentation_final, patient_name):
+    # %% creation of final lesion segmentation 
+    current_path=join(working_folder_crop_parameters_folder,patient_name)
+    #open json file and get coordinates
+    f=open(current_path+'.json')
+    data = json.load(f)
+    orig_size=data['orig_size']
+    min_coords=data['min_coords']
+    max_coords=data['max_coords']
+    f.close()
+
+    #VMI 40keV - load nifti info
+    vmi_40kev_path=join(working_folder_VMI40, patient_name + '_monoe_40kev_0000.nii.gz')
+    vmi_40kev = nib.load(vmi_40kev_path)
+    #vmi_40kev_nii_img=vmi_40kev.get_fdata()
+
+    #load predicted data
+    #predicted_file=path_to_predicted_segmentations+'/Predikce_myel_061_065/'+t+'.nii.gz'
+    predicted_file= join(working_folder_Lesion_segmentation_cropped,patient_name + '.nii.gz')
+    predicted_mask = nib.load(predicted_file)
+    predicted_mask_data=predicted_mask.get_fdata()
+    #create full size image
+    full_size_mask=np.zeros(orig_size,dtype=bool)
+    full_size_mask[min_coords[0]:max_coords[0]+1, min_coords[1]:max_coords[1]+1, min_coords[2]:max_coords[2]+1]=predicted_mask_data
+    #save full size image
+    maybe_mkdir_p(working_folder_Lesion_segmentation_final)
+    pom_full_size_mask = nib.Nifti1Image(full_size_mask, vmi_40kev.affine, vmi_40kev.header)
+    nib.save(pom_full_size_mask, join(working_folder_Lesion_segmentation_final, patient_name + '_lesions_segmentation.nii.gz'))
