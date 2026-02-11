@@ -28,7 +28,7 @@ sys.path.append(os.path.abspath('F:/Code/nnUNet'))
 from nnunetv2.paths import nnUNet_results, nnUNet_raw, nnUNet_preprocessed
 
 # rest of imports
-from utils import * 
+from utils import load_DICOM_data_SITK
 import SimpleITK as sitk
 import pydicom
 import napari
@@ -42,12 +42,20 @@ if __name__ == "__main__":
     ID_patient="S840"
     patient_main_file=join(path_to_DICOM_folders,ID_patient)
     
+    '''
     DICOM_folders_all = []
     # Browse files in a directory and save individual folders
     for filename in os.listdir(patient_main_file):
         if filename.startswith('S20'):
             DICOM_folders_all.append(filename)
+    '''
+
+    DICOM_folders_all = [
+    f for f in os.listdir(patient_main_file)
+    if os.path.isdir(os.path.join(patient_main_file, f))
+    ]
     print(DICOM_folders_all)
+
     
     # Load DICOM files
     for DICOM_folder in DICOM_folders_all:
