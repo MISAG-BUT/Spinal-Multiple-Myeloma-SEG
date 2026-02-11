@@ -26,7 +26,7 @@ def main(base, ID_patient, nnUNet_results, split_data=True):
     patient_name, path_to_convCT_folder, path_to_VMI40_folder = find_convCT_and_VMI40_at_DICOM_folder(patient_main_file)
     
     
-    print('Creation of working folders')
+    print('Creation of working folders and conversion to nifti - Start')
     name_of_output_folder = patient_name + "_output"
     working_folder = join(path_to_output_folder,name_of_output_folder) 
     working_folder_conv_CT = join(working_folder,'Conv_CT')
@@ -36,7 +36,7 @@ def main(base, ID_patient, nnUNet_results, split_data=True):
     working_folder_VMI40_cropped = join(working_folder,'VMI40_cropped')
     working_folder_Segmentation = join(working_folder,'Segmentation') 
     create_working_folders_and_convert_to_nifti(patient_name, working_folder, working_folder_conv_CT, working_folder_conv_CT_in_RAS, working_folder_conv_CT_in_RAS_cropped, working_folder_VMI40, working_folder_VMI40_cropped, working_folder_Segmentation, path_to_convCT_folder, path_to_VMI40_folder)
-    print('Creation of working folders - Done')
+    print('Creation of working folders and conversion to nifti - Done')
 
 
 
@@ -91,7 +91,7 @@ def main(base, ID_patient, nnUNet_results, split_data=True):
     # %% Segmentation of spine with nnUNet        
     input_folder = working_folder_VMI40_cropped 
     output_folder = working_folder_Lesion_segmentation_cropped
-    dataset_name = "Dataset652_MM_lesions_seg_nnUNet_v_2_2_VMI_40"
+    dataset_name = "Dataset710_MM_Lesion_seg_just_VMI_40"
     trainer_name = "nnUNetTrainer__nnUNetPlans__3d_fullres"
     use_folds = ('all',)
     run_nnunet_inference(nnUNet_results, dataset_name, trainer_name, use_folds, input_folder, output_folder)

@@ -9,8 +9,8 @@ import os
 join=os.path.join
 import pydicom
 import napari
-from functions import load_DICOM_data_SITK
-
+#from functions import load_DICOM_data_SITK
+from utils import * 
 
 # def load_DICOM_data_SITK(path_to_series):
 #     # Load all DICOM images into a 3D volume
