@@ -107,7 +107,7 @@ def main(base, ID_patient, nnUNet_results, split_data=True):
 
 if __name__ == "__main__":    
     # Set paths to data and models
-    base = 'F:/Example_data/DATA/' #windows
+    base = 'F:/Example_data/DATA/MM_DICOM_Dataset' #windows
     #base = '/mnt/md0/nohel/Spinal-Multiple-Myeloma-SEG/DATA' #Linux
 
     nnUNet_results = "F:/Spinal-Multiple-Myeloma-SEG_nnUNet_models" # windows
