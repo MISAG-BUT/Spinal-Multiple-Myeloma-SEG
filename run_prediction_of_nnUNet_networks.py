@@ -8,12 +8,12 @@ import sys
 import os
 join=os.path.join
 # path to nnUNet folders - # these paths are not used, just for ignoring of warnings
-os.environ["nnUNet_raw"] = r"nnUNet_project\nnUNet_raw"  
-os.environ["nnUNet_preprocessed"] = r"nnUNet_project\nnUNet_preprocessed"
-os.environ["nnUNet_results"] = r"nnUNet_project\nnUNet_results"
+os.environ["nnUNet_raw"] = r"nnUNet_project/nnUNet_raw"  
+os.environ["nnUNet_preprocessed"] = r"nnUNet_project/nnUNet_preprocessed"
+os.environ["nnUNet_results"] = r"nnUNet_project/nnUNet_results"
 
-#sys.path.append(os.path.abspath('F:/Spinal-Multiple-Myeloma-SEG/nnUNet'))#windows
-sys.path.append(os.path.abspath('/mnt/md0/nohel/Spinal-Multiple-Myeloma-SEG')) #Linux
+sys.path.append(os.path.abspath('F:/Code/nnUNet'))
+#sys.path.append(os.path.abspath('/mnt/md0/nohel/Spinal-Multiple-Myeloma-SEG')) #Linux
 from nnunetv2.paths import nnUNet_results, nnUNet_raw, nnUNet_preprocessed
 from utils import * 
 
@@ -107,11 +107,11 @@ def main(base, ID_patient, nnUNet_results, split_data=True):
 
 if __name__ == "__main__":    
     # Set paths to data and models
-    #base = 'F:/Spinal-Multiple-Myeloma-SEG/DATA' #windows
-    base = '/mnt/md0/nohel/Spinal-Multiple-Myeloma-SEG/DATA' #Linux
+    base = 'F:/Example_data/DATA/' #windows
+    #base = '/mnt/md0/nohel/Spinal-Multiple-Myeloma-SEG/DATA' #Linux
 
-    #nnUNet_results = "F:/Spinal-Multiple-Myeloma-SEG_nnUNet_models" # windows
-    nnUNet_results = "/mnt/md0/nohel/Spinal-Multiple-Myeloma-SEG_nnUNet_models" # Linux
+    nnUNet_results = "F:/Spinal-Multiple-Myeloma-SEG_nnUNet_models" # windows
+    #nnUNet_results = "/mnt/md0/nohel/Spinal-Multiple-Myeloma-SEG_nnUNet_models" # Linux
 
     
     ID_patient="S840"   # name of folder with all DICOM folders for one patient

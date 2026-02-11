@@ -4,39 +4,42 @@ Created on Tue Jun 24 12:41:42 2025
 
 @author: nohel
 """
-import SimpleITK as sitk
+# ------------------------------
+# Add nnU-Net repository to Python path
+# ------------------------------
+import sys
 import os
 join=os.path.join
+
+# Path to your nnU-Net repository (change this to your actual path)
+nnunet_repo_path = r"F:/Code/nnUNet"  
+
+# Add the nnU-Net path to sys.path if not already added
+if nnunet_repo_path not in sys.path:
+    sys.path.append(nnunet_repo_path)
+
+# path to nnUNet folders - # these paths are not used, just for ignoring of warnings
+os.environ["nnUNet_raw"] = r"nnUNet_project/nnUNet_raw"  
+os.environ["nnUNet_preprocessed"] = r"nnUNet_project/nnUNet_preprocessed"
+os.environ["nnUNet_results"] = r"nnUNet_project/nnUNet_results"
+
+sys.path.append(os.path.abspath('F:/Code/nnUNet'))
+#sys.path.append(os.path.abspath('/mnt/md0/nohel/Spinal-Multiple-Myeloma-SEG')) #Linux
+from nnunetv2.paths import nnUNet_results, nnUNet_raw, nnUNet_preprocessed
+
+# rest of imports
+from utils import * 
+import SimpleITK as sitk
 import pydicom
 import napari
-#from functions import load_DICOM_data_SITK
-from utils import * 
 
-# def load_DICOM_data_SITK(path_to_series):
-#     # Load all DICOM images into a 3D volume
-#     dicom_series_reader = sitk.ImageSeriesReader()
-#     # Get the list of DICOM file names in the specified directory
-#     dicom_filenames = dicom_series_reader.GetGDCMSeriesFileNames(path_to_series)
-#     # Set the list of files to be read
-#     dicom_series_reader.SetFileNames(dicom_filenames)
-#     # Read the 3D image from the DICOM series
-#     image_3d = dicom_series_reader.Execute()
-#     # Convert the 3D image to a NumPy array (z, y, x)
-#     img_data = sitk.GetArrayFromImage(image_3d)
-#     return img_data
-      
-    
-#%%
 
-if __name__ == "__main__":
-       
-    #%%
+if __name__ == "__main__":    
+    base='F:/Example_data/DATA/' #path to the dataset folder
+    path_to_DICOM_folders = join(base,'MM_DICOM_Dataset') #path to the DICOM folders, which are organized by patient ID and then by series description
+    path_to_segmentations = join(base,'MM_NIfTI Segmentation') #path to the segmentation masks, which are organized by patient ID and then by mask type (spine or lesions)
     
-    base='F:/Spinal-Multiple-Myeloma-SEG-Example-Data-Nohel'
-    path_to_DICOM_folders = join(base,'MM_DICOM_Dataset')
-    path_to_segmentations = join(base,'MM_NIfTI Segmentation')    
-    
-    ID_patient="S2470"
+    ID_patient="S840"
     patient_main_file=join(path_to_DICOM_folders,ID_patient)
     
     DICOM_folders_all = []
@@ -103,8 +106,7 @@ if __name__ == "__main__":
     CaSupp25_layer = v.add_image(CaSupp25_zxy, name='CaSupp25')       
     CaSupp25_layer.colormap = 'gray'
     CaSupp25_layer.blending = 'additive'
-    CaSupp25_layer.visible = False
-    
+    CaSupp25_layer.visible = False    
     
     CaSupp50_layer = v.add_image(CaSupp50_zxy, name='CaSupp50')       
     CaSupp50_layer.colormap = 'gray'
