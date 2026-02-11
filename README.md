@@ -69,6 +69,7 @@ cd ..
 Install additional required packages:
 ```bash
 pip install pydicom napari
+pip install -U 'napari[all]'
 ```
 
 For convenience, a full setup summary:
