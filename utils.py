@@ -83,21 +83,32 @@ def run_nnunet_inference(nnUNet_results, dataset_name, trainer_name, use_folds, 
         use_folds = use_folds,
         checkpoint_name = 'checkpoint_final.pth',
     )
-    # variant 1: give input and output folders
+
+    # variant 1: This is nnU-Net's default function for making predictions. It works best for batch predictions (predicting many images at once).   
+    '''
+    predictor.predict_from_files(input_folder, 
+        output_folder, 
+        save_probabilities=False, 
+        overwrite=False,
+        num_processes_preprocessing=1, 
+        num_processes_segmentation_export=1, 
+        folder_with_segs_from_prev_stage=None, 
+        num_parts=1, 
+        part_id=0
+    )
+    '''
+    # variant 2: If there is problem with multiprocesing on windows, please use the following code instead of the predictor.predict_from_files function.
+    # This will disable multiprocessing and run the prediction sequentially, which should work on all platforms. 
+    # Note that this will be slower than using multiprocessing, especially if you have many images to predict.
     
-    predictor.predict_from_files(input_folder,
-                                  output_folder,
-                                  save_probabilities=False, overwrite=False,
-                                  num_processes_preprocessing=1, num_processes_segmentation_export=1,
-                                  folder_with_segs_from_prev_stage=None, num_parts=1, part_id=0)
-    '''
-    # variant 2: give input and output folders
-    predictor.predict_from_files_sequential(input_folder,
-                                  output_folder,
-                                  save_probabilities=False, 
-                                  overwrite=False,
-                                  folder_with_segs_from_prev_stage=None)
-    '''
+    predictor.predict_from_files_sequential(
+        input_folder,
+        output_folder,
+        save_probabilities=False,
+        overwrite=True,
+        folder_with_segs_from_prev_stage=None
+    )
+    
 
 
 def load_DICOM_data_SITK(path_to_series):
@@ -113,7 +124,7 @@ def load_DICOM_data_SITK(path_to_series):
     img_data = sitk.GetArrayFromImage(image_3d)
     return img_data
 
-def create_working_folders_and_convert_to_nifti(patient_name, working_folder, working_folder_conv_CT, working_folder_conv_CT_in_RAS, working_folder_conv_CT_in_RAS_cropped, working_folder_VMI40, working_folder_VMI40_cropped, working_folder_Segmentation, path_to_convCT_folder, path_to_VMI40_folder):
+def create_working_folders_and_convert_to_nifti(patient_name, working_folder, working_folder_conv_CT, working_folder_conv_CT_in_RAS, working_folder_conv_CT_in_RAS_cropped, working_folder_VMI40, working_folder_VMI40_cropped, working_folder_Segmentation, working_folder_Spine_segmentation_final, working_folder_Spine_segmentation_in_RAS, working_folder_Spine_segmentation_in_RAS_cropped, working_folder_crop_parameters_folder, working_folder_Lesion_segmentation_cropped, working_folder_Lesion_segmentation_final, path_to_convCT_folder, path_to_VMI40_folder):
     maybe_mkdir_p(working_folder) 
     maybe_mkdir_p(working_folder_conv_CT) 
     maybe_mkdir_p(working_folder_conv_CT_in_RAS)
@@ -121,6 +132,12 @@ def create_working_folders_and_convert_to_nifti(patient_name, working_folder, wo
     maybe_mkdir_p(working_folder_VMI40) 
     maybe_mkdir_p(working_folder_VMI40_cropped) 
     maybe_mkdir_p(working_folder_Segmentation) 
+    maybe_mkdir_p(working_folder_Spine_segmentation_final) 
+    maybe_mkdir_p(working_folder_Spine_segmentation_in_RAS) 
+    maybe_mkdir_p(working_folder_Spine_segmentation_in_RAS_cropped) 
+    maybe_mkdir_p(working_folder_crop_parameters_folder) 
+    maybe_mkdir_p(working_folder_Lesion_segmentation_cropped) 
+    maybe_mkdir_p(working_folder_Lesion_segmentation_final) 
 
     # Vytvoření čtečky DICOM série
     reader = sitk.ImageSeriesReader()    

@@ -4,49 +4,65 @@ Created on Wed Aug 13 10:30:33 2025
 
 @author: nohel
 """
+# ------------------------------
+# Add nnU-Net repository to Python path
+# ------------------------------
 import sys
 import os
 join=os.path.join
+
+# Path to your nnU-Net repository (change this to your actual path)
+nnunet_repo_path = r"F:/Code/nnUNet"  
+
+# Add the nnU-Net path to sys.path if not already added
+if nnunet_repo_path not in sys.path:
+    sys.path.append(nnunet_repo_path)
+
 # path to nnUNet folders - # these paths are not used, just for ignoring of warnings
 os.environ["nnUNet_raw"] = r"nnUNet_project/nnUNet_raw"  
 os.environ["nnUNet_preprocessed"] = r"nnUNet_project/nnUNet_preprocessed"
 os.environ["nnUNet_results"] = r"nnUNet_project/nnUNet_results"
 
-sys.path.append(os.path.abspath('F:/Code/nnUNet'))
-#sys.path.append(os.path.abspath('/mnt/md0/nohel/Spinal-Multiple-Myeloma-SEG')) #Linux
 from nnunetv2.paths import nnUNet_results, nnUNet_raw, nnUNet_preprocessed
 from utils import * 
 
+
 def main(base, ID_patient, nnUNet_results, split_data=True):
     patient_main_file=join(base,ID_patient)
-    path_to_output_folder = base + "_output"
-    
+    path_to_output_folder = base + "_output"    
 
     # Find convCT and VMI40 image and convert it to nifti
-    patient_name, path_to_convCT_folder, path_to_VMI40_folder = find_convCT_and_VMI40_at_DICOM_folder(patient_main_file)
-    
+    patient_name, path_to_convCT_folder, path_to_VMI40_folder = find_convCT_and_VMI40_at_DICOM_folder(patient_main_file)    
     
     print('Creation of working folders and conversion to nifti - Start')
     name_of_output_folder = patient_name + "_output"
     working_folder = join(path_to_output_folder,name_of_output_folder) 
+
+    # If the working folder already exists, delete it. This ensures that every time we run the script for this patient,
+    # we start from a clean state and regenerate all files
+    if os.path.exists(working_folder):
+        print(f"Working folder already exists, removing: {working_folder}")
+        shutil.rmtree(working_folder)
+
     working_folder_conv_CT = join(working_folder,'Conv_CT')
     working_folder_conv_CT_in_RAS = join(working_folder,'Conv_CT_in_RAS')
     working_folder_conv_CT_in_RAS_cropped = join(working_folder,'Conv_CT_in_RAS_cropped')
     working_folder_VMI40 = join(working_folder,'VMI40')
     working_folder_VMI40_cropped = join(working_folder,'VMI40_cropped')
     working_folder_Segmentation = join(working_folder,'Segmentation') 
-    create_working_folders_and_convert_to_nifti(patient_name, working_folder, working_folder_conv_CT, working_folder_conv_CT_in_RAS, working_folder_conv_CT_in_RAS_cropped, working_folder_VMI40, working_folder_VMI40_cropped, working_folder_Segmentation, path_to_convCT_folder, path_to_VMI40_folder)
+    working_folder_Spine_segmentation_final = join(working_folder_Segmentation,'Spine_segmentation_final') 
+    working_folder_Spine_segmentation_in_RAS = join(working_folder_Segmentation,'Spine_segmentation_in_RAS') 
+    working_folder_Spine_segmentation_in_RAS_cropped = join(working_folder_Segmentation,'Spine_segmentation_in_RAS_cropped')
+    working_folder_crop_parameters_folder = join(working_folder_Segmentation, "crop_parameters_folder")
+    working_folder_Lesion_segmentation_cropped = join(working_folder_Segmentation, "Lesion_segmentation_cropped")
+    working_folder_Lesion_segmentation_final = join(working_folder_Segmentation, "Lesion_segmentation_final")
+    create_working_folders_and_convert_to_nifti(patient_name, working_folder, working_folder_conv_CT, working_folder_conv_CT_in_RAS, working_folder_conv_CT_in_RAS_cropped, working_folder_VMI40, working_folder_VMI40_cropped, working_folder_Segmentation, working_folder_Spine_segmentation_final, working_folder_Spine_segmentation_in_RAS, working_folder_Spine_segmentation_in_RAS_cropped, working_folder_crop_parameters_folder, working_folder_Lesion_segmentation_cropped, working_folder_Lesion_segmentation_final, path_to_convCT_folder, path_to_VMI40_folder)
     print('Creation of working folders and conversion to nifti - Done')
-
-
 
 
     print('Spine segmentation - Start')
     print('Spine segmentation - Preparation of data for segmentation')
-    working_folder_Spine_segmentation_final = join(working_folder_Segmentation,'Spine_segmentation_final') 
-    working_folder_Spine_segmentation_in_RAS = join(working_folder_Segmentation,'Spine_segmentation_in_RAS') 
-    working_folder_Spine_segmentation_in_RAS_cropped = join(working_folder_Segmentation,'Spine_segmentation_in_RAS_cropped')
-
+    
     if split_data:
         split_convCT_data(working_folder_conv_CT_in_RAS, working_folder_conv_CT_in_RAS_cropped, patient_name)
         working_input_folder_for_spine_segmentation = working_folder_conv_CT_in_RAS_cropped
@@ -76,16 +92,9 @@ def main(base, ID_patient, nnUNet_results, split_data=True):
     print('Spine segmentation - Done ')
 
 
-
     print('Lesion segmentation - Start ')
-
     print('Lesion segmentation - Preparation of data for segmentation')
-    working_folder_crop_parameters_folder = join(working_folder_Segmentation, "crop_parameters_folder")
-    working_folder_Lesion_segmentation_cropped = join(working_folder_Segmentation, "Lesion_segmentation_cropped")
-    working_folder_Lesion_segmentation_final = join(working_folder_Segmentation, "Lesion_segmentation_final")
-
     prepare_data_for_lesion_segmentation(working_folder_Spine_segmentation_final, working_folder_crop_parameters_folder, working_folder_VMI40, working_folder_VMI40_cropped, patient_name)
-    
     print('Lession segmentation - Start of prediction with nnUNet')
 
     # %% Segmentation of spine with nnUNet        
