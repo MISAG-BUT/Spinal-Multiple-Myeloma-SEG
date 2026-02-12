@@ -83,11 +83,19 @@ def run_nnunet_inference(nnUNet_results, dataset_name, trainer_name, use_folds, 
         checkpoint_name = 'checkpoint_final.pth',
     )
     # variant 1: give input and output folders
+    '''
     predictor.predict_from_files(input_folder,
                                   output_folder,
                                   save_probabilities=False, overwrite=False,
                                   num_processes_preprocessing=1, num_processes_segmentation_export=1,
                                   folder_with_segs_from_prev_stage=None, num_parts=1, part_id=0)
+    '''
+    # variant 2: give input and output folders
+    predictor.predict_from_files_sequential(input_folder,
+                                  output_folder,
+                                  save_probabilities=False, 
+                                  overwrite=False,
+                                  folder_with_segs_from_prev_stage=None)
     
 
 
