@@ -24,13 +24,14 @@ from json import JSONEncoder
 import pydicom
 
 def find_convCT_and_VMI40_at_DICOM_folder(patient_main_file):
-    DICOM_folders_all = []
+
     # Browse files in a directory and save individual folders
-    for filename in os.listdir(patient_main_file):
-        if filename.startswith('S20'):
-            DICOM_folders_all.append(filename)
+    DICOM_folders_all = [
+    f for f in os.listdir(patient_main_file)
+    if os.path.isdir(os.path.join(patient_main_file, f))
+    ]
+    print(DICOM_folders_all)    
     
-    #print(DICOM_folders_all)
     print('Searching of convCT and VMI40 data')
     # Load DICOM files
     for DICOM_folder in DICOM_folders_all:
@@ -83,7 +84,7 @@ def run_nnunet_inference(nnUNet_results, dataset_name, trainer_name, use_folds, 
         checkpoint_name = 'checkpoint_final.pth',
     )
     # variant 1: give input and output folders
-    '''
+    
     predictor.predict_from_files(input_folder,
                                   output_folder,
                                   save_probabilities=False, overwrite=False,
@@ -96,7 +97,7 @@ def run_nnunet_inference(nnUNet_results, dataset_name, trainer_name, use_folds, 
                                   save_probabilities=False, 
                                   overwrite=False,
                                   folder_with_segs_from_prev_stage=None)
-    
+    '''
 
 
 def load_DICOM_data_SITK(path_to_series):
