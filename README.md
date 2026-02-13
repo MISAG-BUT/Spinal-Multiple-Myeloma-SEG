@@ -3,6 +3,17 @@
 ## Overview
 Welcome to the repository for the paper **"Spinal-Multiple-Myeloma-SEG"**! This repository provides the code for the implementation of the networks for segmentation within the popular [nnUNet framework](https://github.com/MIC-DKFZ/nnUNet).
 
+### Read the [paper](paper): 
+
+Authors:  
+Michal Nohel, Vlatimil Valek, Tomas Rohan, Martin Stork, Roman Jakubcek, Jiri Chmelik and Marek Dostal 
+
+Author Affiliations:  
+Department of Biomedical Engineering, Faculty of Electrical Engineering and Communication, Brno University of Technology, Brno, Czech Republic
+Department of Radiology and Nuclear Medicine, University Hospital Brno and Masaryk University, Brno, Czech Republic
+Internal Hematology and Oncology Clinic, University Hospital Brno, Brno, Czech Republic
+Department of Biophysics, Masaryk University, Brno, Czech Republic
+
 The repository contains two main scripts:  
 1. A script for visualizing the dataset, allowing you to explore the spinal and myeloma images used.  
 2. A script for performing segmentation predictions on the spine and myeloma regions. These predictions were utilized to create the myeloma database used in the study.  
