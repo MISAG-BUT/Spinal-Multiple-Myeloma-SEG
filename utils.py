@@ -130,7 +130,7 @@ def run_nnunet_inference(
     predictor = nnUNetPredictor(
         tile_step_size=0.5,
         use_gaussian=True,
-        use_mirroring=False,
+        use_mirroring=True,
         perform_everything_on_device=True,
         device=torch.device('cuda', 0),
         verbose=False,
@@ -151,7 +151,7 @@ def run_nnunet_inference(
     # Variant 1: Default nnU-Net batch prediction (uses multiprocessing)
     # Works best when predicting multiple images at once
     # -------------------------------------------------------------------------
-    '''
+    
     predictor.predict_from_files(
         input_folder,
         output_folder,
@@ -163,12 +163,13 @@ def run_nnunet_inference(
         num_parts=1,
         part_id=0
     )
-    '''
+    
 
     # -------------------------------------------------------------------------
     # Variant 2: Sequential prediction (no multiprocessing)
     # Safer on Windows or problematic setups, but slower
     # -------------------------------------------------------------------------
+    '''
     predictor.predict_from_files_sequential(
         input_folder,
         output_folder,
@@ -176,7 +177,7 @@ def run_nnunet_inference(
         overwrite=True,
         folder_with_segs_from_prev_stage=None
     )
-
+    '''
 # =============================================================================
 # Working folders & conversion
 # =============================================================================
