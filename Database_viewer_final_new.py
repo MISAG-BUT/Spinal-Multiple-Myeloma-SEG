@@ -26,8 +26,8 @@ from os.path import join
 # ----------------------------------------------------------
 # Add nnU-Net repository to Python path
 # ----------------------------------------------------------
-NNUNET_REPO_PATH = r"F:/Code/nnUNet"  # Windows
-# NNUNET_REPO_PATH = "/mnt/md0/nohel/nnUNet"  # Linux
+# Path to your nnU-Net repository (change this to your actual path)
+NNUNET_REPO_PATH = r"F:/Code/nnUNet"  
 
 if NNUNET_REPO_PATH not in sys.path:
     sys.path.append(NNUNET_REPO_PATH)

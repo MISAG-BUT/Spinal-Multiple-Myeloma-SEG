@@ -25,9 +25,8 @@ import sys
 import shutil
 from os.path import join
 
-# Path to nnU-Net repository (used for imports)
-NNUNET_REPO_PATH = r"F:/Code/nnUNet"  # Windows
-# NNUNET_REPO_PATH = "/mnt/md0/nohel/nnUNet"  # Linux
+# Path to your nnU-Net repository (change this to your actual path)
+NNUNET_REPO_PATH = r"F:/Code/nnUNet"  
 
 if NNUNET_REPO_PATH not in sys.path:
     sys.path.append(NNUNET_REPO_PATH)
@@ -220,12 +219,9 @@ if __name__ == "__main__":
     # ------------------------------------------------------
     # Configuration
     # ------------------------------------------------------
-    base = "F:/Example_data/DATA/MM_DICOM_Dataset"          # Windows
-    # base = "/mnt/md0/nohel/Spinal-Multiple-Myeloma-SEG/DATA"  # Linux
-
-    nnUNet_results = "F:/Spinal-Multiple-Myeloma-SEG_nnUNet_models"  # Windows
-    # nnUNet_results = "/mnt/md0/nohel/Spinal-Multiple-Myeloma-SEG_nnUNet_models"  # Linux
-
+    base = 'F:/Example_data/DATA/'  # path to the dataset folder
+    path_to_DICOM_folders = join(base, 'MM_DICOM_Dataset')  #path to the DICOM folders, which are organized by patient ID and then by series description
+    nnUNet_results = "F:/Spinal-Multiple-Myeloma-SEG_nnUNet_models"  #path to the folder containing trained nnU-Net models (should have subfolders for each model)
     ID_patient = "S840"
 
     # If True, data are split along Z-axis to reduce memory requirements.
@@ -235,4 +231,4 @@ if __name__ == "__main__":
     # ------------------------------------------------------
     # Run pipeline
     # ------------------------------------------------------
-    main(base, ID_patient, nnUNet_results, split_data)
+    main(path_to_DICOM_folders, ID_patient, nnUNet_results, split_data)
