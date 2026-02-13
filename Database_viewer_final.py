@@ -47,7 +47,7 @@ from nnunetv2.paths import nnUNet_results, nnUNet_raw, nnUNet_preprocessed
 # ----------------------------------------------------------
 # Project-specific imports
 # ----------------------------------------------------------
-from utils_new import load_DICOM_data_SITK
+from utils import load_DICOM_data_SITK
 import SimpleITK as sitk
 import pydicom
 import napari

@@ -4,6 +4,7 @@ Spinal Multiple Myeloma Segmentation Pipeline
 =============================================
 
 This script runs a complete nnU-Net-based segmentation pipeline for a single patient:
+
     1) Conversion of ConvCT and VMI40 DICOM data to NIfTI
     2) Spine segmentation from ConvCT
     3) Reorientation of spine segmentation to original image space
@@ -12,6 +13,35 @@ This script runs a complete nnU-Net-based segmentation pipeline for a single pat
 
 The pipeline is designed to always start from a clean working directory
 to ensure reproducibility and avoid mixing results from previous runs.
+
+Hardware & OS Testing
+--------------------
+The pipeline has been tested on both Linux and Windows systems with high-end GPUs:
+
+Linux:
+    - GPU: Nvidia Titan Xp, 12 GB GDDR5
+    - Motherboard: GIGABYTE Z690 GAMING X DDR5
+    - CPU: Intel Core i9 12900KF (8+8 cores/threads, 2.4/3.2 GHz)
+    - RAM: 64 GB DDR5
+    - Storage: SSD 1 TB (SYSTEM), HDD 4 TB RAID5 (DATA)
+    - OS: Ubuntu 24.04
+
+Windows:
+    - GPU: EVGA GeForce RTX 3090, 24 GB GDDR6
+    - CPU: Intel Core i9-10900KF (10/20 cores/threads, 3.7 GHz)
+    - RAM: 64 GB
+    - Storage: SSD M.2 2TB (SYSTEM)
+    - OS: Windows 10
+
+Notes on Multiprocessing
+------------------------
+- By default, the pipeline is configured for Linux and may use multiprocessing
+  for faster nnU-Net inference.
+- On Windows, due to potential issues with Python multiprocessing, the default
+  nnU-Net inference (variant 1) may fail when run from a clean session.
+- In such cases, open `utils.py` and in the function `run_nnunet_inference`, 
+  switch to variant 2 (`predict_from_files_sequential`), which disables multiprocessing.
+  This ensures safe execution on Windows, although it may run slower.
 
 Author: nohel
 Created: Aug 13, 2025
@@ -38,7 +68,7 @@ os.environ["nnUNet_preprocessed"] = "nnUNet_project/nnUNet_preprocessed"
 os.environ["nnUNet_results"] = "nnUNet_project/nnUNet_results"
 
 from nnunetv2.paths import nnUNet_results
-from utils_new import *
+from utils import *
 
 
 # ==========================================================
