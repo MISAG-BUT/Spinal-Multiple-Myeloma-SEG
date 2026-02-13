@@ -3,7 +3,7 @@
 ## Overview
 Welcome to the repository for the paper **"Spinal-Multiple-Myeloma-SEG"**! This repository provides the code for the implementation of the networks for segmentation within the popular [nnUNet framework](https://github.com/MIC-DKFZ/nnUNet).
 
-### Read the [paper](paper): 
+### Read the [paper](TO BE Updated): 
 
 Authors:  
 Michal Nohel, Vlatimil Valek, Tomas Rohan, Martin Stork, Roman Jakubcek, Jiri Chmelik and Marek Dostal 
@@ -31,7 +31,7 @@ Pre-trained nnU-Net models for this project are available on Zenodo. These model
 - All models operate on **NIfTI (.nii.gz)** inputs and are intended for **research and development purposes only**.
 
 **Links:**
-- Zenodo repository with traied models is here at: [Spinal-Multiple-Myeloma-SEG_nnUNet_models](https://zenodo.org/uploads/18598645)
+- Zenodo repository with trained models can be downloaded from Zenodo repositoy: [Spinal-Multiple-Myeloma-SEG_nnUNet_models](https://zenodo.org/uploads/18598645)
 - Zenodo snapshot of GitHub repo: [https://zenodo.org/records/18596640](https://zenodo.org/records/18596640)
 - Zenodo DOI: [https://doi.org/10.5281/zenodo.15878952](https://doi.org/10.5281/zenodo.15878952)
 
@@ -150,8 +150,99 @@ pip install pydicom napari
 pip install -U 'napari[all]'
 ```
 
-Always replace <path-to-your-python-executable> with the correct path on your system. For different CUDA versions or CPU-only setups, check the [PyTorch installation guide](https://pytorch.org/get-started/locally/)
-.
+Always replace <path-to-your-python-executable> with the correct path on your system. For different CUDA versions or CPU-only setups, check the [PyTorch installation guide](https://pytorch.org/get-started/locally/).
+
+## Running the Pipeline / Inference
+
+### Python Script-Based Inference
+This repository provides two Python scripts for working with the Spinal-Multiple-Myeloma-SEG data:
+
+#### 1. Full Segmentation Pipeline  
+**`run_prediction_of_nnUNet_networks_on_TCIA_data_final.py`**
+
+This script runs the complete nnU-Net–based segmentation pipeline for a single patient, starting directly from DICOM data and producing final lesion segmentations in the original image space.
+
+The pipeline consists of the following steps:
+
+1. Conversion of ConvCT and VMI40 DICOM series to NIfTI format  
+2. Spine segmentation from ConvCT data using nnU-Net  
+3. Reorientation of spine segmentation back to the original image space  
+4. Lesion segmentation from VMI 40 keV images  
+5. Final reconstruction of lesion segmentation in the original image space  
+
+To ensure reproducibility, the pipeline always starts from a clean working directory. Any existing intermediate results for the selected patient are removed before processing.
+
+#### 2. Visualization Script
+
+**`Database_viewer_final.py`**
+This script is intended for qualitative inspection of the dataset and segmentation results. It loads multiple CT reconstructions from DICOM data, overlays spine and lesion segmentation masks, and visualizes everything using **Napari**.
+
+### Loaded Data
+
+For a selected patient, the script automatically detects and loads the following DICOM series based on the *SeriesDescription* metadata:
+
+- Conventional CT (ConvCT)
+- Virtual Monoenergetic Images (VMI):
+  - 40 keV
+  - 80 keV
+  - 120 keV
+- Calcium Suppression reconstructions:
+  - 25 Index
+  - 50 Index
+  - 75 Index
+  - 100 Index
+
+In addition, the script loads precomputed segmentation masks in **NIfTI (.nii.gz)** format:
+
+- Spine segmentation mask
+- Osteolytic lesion segmentation mask
+
+### Visualization Features
+
+All volumes and segmentation masks are displayed together in a single Napari viewer:
+
+- CT volumes are shown as grayscale image layers
+- Spine segmentation is overlaid in blue
+- Lesion segmentation is overlaid in red
+- Individual layers can be toggled on/off for interactive comparison
+- Opacity and visibility can be adjusted directly in Napari
+
+This setup enables detailed visual comparison between different energy reconstructions and segmentation outputs.
+
+
+##### Hardware and OS Compatibility
+
+The pipeline has been tested on both Linux and Windows systems with high-end NVIDIA GPUs:
+
+- **Linux (Ubuntu 24.04)**  
+  - Nvidia Titan Xp (12 GB GDDR5)  
+  - Intel Core i9-12900KF  
+  - 64 GB RAM  
+
+- **Windows 10**  
+  - EVGA GeForce RTX 3090 (24 GB GDDR6)  
+  - Intel Core i9-10900KF  
+  - 64 GB RAM  
+
+##### Notes on Multiprocessing
+
+- By default, the pipeline is configured for **Linux** and may use multiprocessing during nnU-Net inference.
+- On **Windows**, Python multiprocessing can occasionally fail when running from a clean session.
+- If inference fails on Windows, open `utils.py` and modify the function `run_nnunet_inference` to use **variant 2** (`predict_from_files_sequential`), which disables multiprocessing.
+- This variant is slower but ensures safe and stable execution on Windows systems.
+---
+
+
+
+### Command-Line Inference Using nnUNet
+The trained models can also be used with the default nnU-Net CLI for folder-based inference. For inference you can use the default [nnUNet inference functionalities](https://github.com/MIC-DKFZ/nnUNet/blob/master/documentation/how_to_use_nnunet.md). 
+
+To run a single model on all input images:
+
+```bash
+nnUNetv2_predict_from_modelfolder -i INPUT_FOLDER -o OUTPUT_FOLDER -m MODEL_FOLDER -f all
+```
+
 
 ## Citation
 
