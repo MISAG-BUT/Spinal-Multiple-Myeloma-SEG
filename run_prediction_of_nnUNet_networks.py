@@ -22,7 +22,6 @@ if nnunet_repo_path not in sys.path:
 os.environ["nnUNet_raw"] = r"nnUNet_project/nnUNet_raw"  
 os.environ["nnUNet_preprocessed"] = r"nnUNet_project/nnUNet_preprocessed"
 os.environ["nnUNet_results"] = r"nnUNet_project/nnUNet_results"
-
 from nnunetv2.paths import nnUNet_results, nnUNet_raw, nnUNet_preprocessed
 from utils import * 
 

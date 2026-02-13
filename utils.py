@@ -39,7 +39,6 @@ def find_convCT_and_VMI40_at_DICOM_folder(patient_main_file):
         # Loading all DICOM files from the directory, skipping the DIRFILE file
         DICOM_files = [os.path.join(DICOM_folder_path, f) for f in os.listdir(DICOM_folder_path) if f != 'DIRFILE']
         series_description = pydicom.dcmread(DICOM_files[0]).get('SeriesDescription')
-        #print(series_description)
         if series_description.endswith("_konv"):
             path_to_convCT_folder = DICOM_folder_path
             patient_name = series_description[:8]
