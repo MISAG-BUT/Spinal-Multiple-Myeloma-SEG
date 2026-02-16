@@ -173,7 +173,7 @@ Visualization Script
 
 This script is intended for qualitative inspection of the dataset and segmentation
 results. It loads multiple CT reconstructions from DICOM data, overlays spine and
-lesion segmentation masks, and visualizes everything using Napari.
+lesion segmentation masks, and visualizes everything using **Napari**.
 
 The script can be executed both:
 - directly from the command line, and
@@ -196,7 +196,7 @@ DICOM series based on the SeriesDescription metadata:
   - 75 Index
   - 100 Index
 
-In addition, the script loads precomputed segmentation masks in NIfTI (.nii.gz) format:
+In addition, the script loads precomputed segmentation masks in **NIfTI (.nii.gz)** format:
 
 - Spine segmentation mask
 - Osteolytic lesion segmentation mask
@@ -287,107 +287,17 @@ Arguments:
   If True, data are split along the Z-axis to reduce memory requirements
 
 
----------------------------------------------------------------------
-Command-Line Inference Using nnU-Net
----------------------------------------------------------------------
+### Command-Line Inference Using nnUNet
+The trained models can also be used with the default nnU-Net CLI for folder-based inference. For inference you can use the default [nnUNet inference functionalities](https://github.com/MIC-DKFZ/nnUNet/blob/master/documentation/how_to_use_nnunet.md). 
 
-The trained models can also be used with the default nnU-Net CLI for folder-based
-inference. For more details, see the official nnU-Net documentation:
-https://github.com/MIC-DKFZ/nnUNet/blob/master/documentation/how_to_use_nnunet.md
+To run a single model on all input images:
 
-Example (run all folds of a model):
-
+```bash
 nnUNetv2_predict_from_modelfolder -i INPUT_FOLDER -o OUTPUT_FOLDER -m MODEL_FOLDER -f all
-
-
+```
 ---------------------------------------------------------------------
 Hardware and OS Compatibility
 ---------------------------------------------------------------------
-
-The pipeline has been tested on both Linux and Windows systems with high-end NVIDIA GPUs:
-
-Linux (Ubuntu 24.04):
-- Nvidia Titan Xp (12 GB GDDR5)
-- Intel Core i9-12900KF
-- 64 GB RAM
-
-Windows 10:
-- EVGA GeForce RTX 3090 (24 GB GDDR6)
-- Intel Core i9-10900KF
-- 64 GB RAM
-
-
-Notes on Multiprocessing
-------------------------
-- By default, the pipeline is configured for **Linux** and may use multiprocessing during nnU-Net inference.
-- On **Windows**, Python multiprocessing can occasionally fail when running from a clean session.
-- If inference fails on Windows, open `utils.py` and modify the function `run_nnunet_inference` to use **variant 2** (`predict_from_files_sequential`), which disables multiprocessing.
-- This variant is slower but ensures safe and stable execution on Windows systems.
----
-
-
-
-
-
-## Running the Pipeline / Inference
-
-### Python Script-Based Inference
-This repository provides two Python scripts for working with the Spinal-Multiple-Myeloma-SEG data:
-
-#### 1. Full Segmentation Pipeline  
-**`run_prediction_of_nnUNet_networks_on_TCIA_data_final.py`**
-
-This script runs the complete nnU-Net–based segmentation pipeline for a single patient, starting directly from DICOM data and producing final lesion segmentations in the original image space.
-
-The pipeline consists of the following steps:
-
-1. Conversion of ConvCT and VMI40 DICOM series to NIfTI format  
-2. Spine segmentation from ConvCT data using nnU-Net  
-3. Reorientation of spine segmentation back to the original image space  
-4. Lesion segmentation from VMI 40 keV images  
-5. Final reconstruction of lesion segmentation in the original image space  
-
-To ensure reproducibility, the pipeline always starts from a clean working directory. Any existing intermediate results for the selected patient are removed before processing.
-
-#### 2. Visualization Script
-
-**`Database_viewer_final.py`**
-This script is intended for qualitative inspection of the dataset and segmentation results. It loads multiple CT reconstructions from DICOM data, overlays spine and lesion segmentation masks, and visualizes everything using **Napari**.
-
-#### Loaded Data
-
-For a selected patient, the script automatically detects and loads the following DICOM series based on the *SeriesDescription* metadata:
-
-- Conventional CT (ConvCT)
-- Virtual Monoenergetic Images (VMI):
-  - 40 keV
-  - 80 keV
-  - 120 keV
-- Calcium Suppression reconstructions:
-  - 25 Index
-  - 50 Index
-  - 75 Index
-  - 100 Index
-
-In addition, the script loads precomputed segmentation masks in **NIfTI (.nii.gz)** format:
-
-- Spine segmentation mask
-- Osteolytic lesion segmentation mask
-
-#### Visualization Features
-
-All volumes and segmentation masks are displayed together in a single Napari viewer:
-
-- CT volumes are shown as grayscale image layers
-- Spine segmentation is overlaid in blue
-- Lesion segmentation is overlaid in red
-- Individual layers can be toggled on/off for interactive comparison
-- Opacity and visibility can be adjusted directly in Napari
-
-This setup enables detailed visual comparison between different energy reconstructions and segmentation outputs.
-
-
-##### Hardware and OS Compatibility
 
 The pipeline has been tested on both Linux and Windows systems with high-end NVIDIA GPUs:
 
@@ -401,8 +311,9 @@ The pipeline has been tested on both Linux and Windows systems with high-end NVI
   - Intel Core i9-10900KF  
   - 64 GB RAM  
 
-##### Notes on Multiprocessing
 
+Notes on Multiprocessing
+------------------------
 - By default, the pipeline is configured for **Linux** and may use multiprocessing during nnU-Net inference.
 - On **Windows**, Python multiprocessing can occasionally fail when running from a clean session.
 - If inference fails on Windows, open `utils.py` and modify the function `run_nnunet_inference` to use **variant 2** (`predict_from_files_sequential`), which disables multiprocessing.
@@ -410,21 +321,13 @@ The pipeline has been tested on both Linux and Windows systems with high-end NVI
 ---
 
 
-
-### Command-Line Inference Using nnUNet
-The trained models can also be used with the default nnU-Net CLI for folder-based inference. For inference you can use the default [nnUNet inference functionalities](https://github.com/MIC-DKFZ/nnUNet/blob/master/documentation/how_to_use_nnunet.md). 
-
-To run a single model on all input images:
-
-```bash
-nnUNetv2_predict_from_modelfolder -i INPUT_FOLDER -o OUTPUT_FOLDER -m MODEL_FOLDER -f all
-```
-
-
 ## Citation
 
 If you use this code in your research, please cite our paper:
 TO DO
+
+
+
 
 
 
