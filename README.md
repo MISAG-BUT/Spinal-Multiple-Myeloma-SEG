@@ -129,7 +129,7 @@ pip install napari
 pip install -U 'napari[all]'
 ```
 
-#### Step 4: Full Setup Summary
+#### Full Setup Summary
 For convenience, a full setup summary:
 ```bash
 git clone https://github.com/MISAG-BUT/Spinal-Multiple-Myeloma-SEG.git
@@ -151,6 +151,183 @@ pip install -U 'napari[all]'
 ```
 
 Always replace <path-to-your-python-executable> with the correct path on your system. For different CUDA versions or CPU-only setups, check the [PyTorch installation guide](https://pytorch.org/get-started/locally/).
+
+Running the Pipeline / Inference
+===============================
+
+This repository provides two complementary ways of working with the
+Spinal-Multiple-Myeloma-SEG data:
+
+1. Data visualization and qualitative inspection using Python scripts (recommended first step)
+2. Full nnU-Net–based segmentation pipeline for automatic inference
+3. Optional command-line inference using the default nnU-Net CLI
+
+
+---------------------------------------------------------------------
+Data Visualization and Inspection
+---------------------------------------------------------------------
+
+Visualization Script
+--------------------
+**`Database_viewer_final.py`**
+
+This script is intended for qualitative inspection of the dataset and segmentation
+results. It loads multiple CT reconstructions from DICOM data, overlays spine and
+lesion segmentation masks, and visualizes everything using Napari.
+
+The script can be executed both:
+- directly from the command line, and
+- interactively from an IDE such as VS Code.
+
+
+Loaded Data
+-----------
+For a selected patient, the script automatically detects and loads the following
+DICOM series based on the SeriesDescription metadata:
+
+- Conventional CT (ConvCT)
+- Virtual Monoenergetic Images (VMI):
+  - 40 keV
+  - 80 keV
+  - 120 keV
+- Calcium Suppression reconstructions:
+  - 25 Index
+  - 50 Index
+  - 75 Index
+  - 100 Index
+
+In addition, the script loads precomputed segmentation masks in NIfTI (.nii.gz) format:
+
+- Spine segmentation mask
+- Osteolytic lesion segmentation mask
+
+
+Visualization Features
+----------------------
+All volumes and segmentation masks are displayed together in a single Napari viewer:
+
+- CT volumes are shown as grayscale image layers
+- Spine segmentation is overlaid in blue
+- Lesion segmentation is overlaid in red
+- Individual layers can be toggled on/off for interactive comparison
+- Opacity and visibility can be adjusted directly in Napari
+
+This setup enables detailed visual comparison between different energy reconstructions
+and segmentation outputs.
+
+
+Running the Visualization Script from the Command Line
+-----------------------------------------------------
+The visualization script uses argparse and can be executed directly from the command
+line by specifying only the required paths and patient ID:
+
+python Database_viewer_final.py \
+  --path_to_DICOM_folders /path/to/MM_DICOM_Dataset \
+  --path_to_segmentations /path/to/MM_NIfTI_Segmentation \
+  --ID_patient S840
+
+Arguments:
+- --path_to_DICOM_folders
+  Path to the DICOM folders, which are organized by patient ID and then by series description
+
+- --path_to_segmentations
+  Path to the NIfTI segmentation masks, which are organized by patient ID and mask type
+  (spine or lesions)
+
+- --ID_patient
+  Patient identifier (e.g. S840)
+
+
+---------------------------------------------------------------------
+Full Segmentation Pipeline (Python)
+---------------------------------------------------------------------
+
+Segmentation Script
+-------------------
+**`run_prediction_of_nnUNet_networks_on_TCIA_data_final.py`**
+
+This script runs the complete nnU-Net–based segmentation pipeline for a single patient,
+starting directly from DICOM data and producing final lesion segmentations in the
+original image space.
+
+The pipeline always starts from a clean working directory to ensure reproducibility.
+Any existing intermediate results for the selected patient are removed before processing.
+
+
+Pipeline Steps
+--------------
+1. Conversion of ConvCT and VMI 40 keV DICOM series to NIfTI format
+2. Spine segmentation from ConvCT data using nnU-Net
+3. Reorientation of the spine segmentation back to the original image space
+4. Lesion segmentation from VMI 40 keV images
+5. Final reconstruction of lesion segmentation in the original image space
+
+
+Running the Segmentation Pipeline
+--------------------------------
+The segmentation script can be executed from the command line using its argparse interface:
+
+python run_prediction_of_nnUNet_networks_on_TCIA_data_final.py \
+  --path_to_DICOM_folders /path/to/MM_DICOM_Dataset \
+  --nnUNet_results /path/to/nnUNet_trained_models \
+  --ID_patient S840 \
+  --split_data True
+
+Arguments:
+- --path_to_DICOM_folders
+  Path to the DICOM folders organized by patient ID and series description
+
+- --nnUNet_results
+  Path to the folder containing trained nnU-Net models
+
+- --ID_patient
+  Patient identifier (e.g. S840)
+
+- --split_data
+  If True, data are split along the Z-axis to reduce memory requirements
+
+
+---------------------------------------------------------------------
+Command-Line Inference Using nnU-Net
+---------------------------------------------------------------------
+
+The trained models can also be used with the default nnU-Net CLI for folder-based
+inference. For more details, see the official nnU-Net documentation:
+https://github.com/MIC-DKFZ/nnUNet/blob/master/documentation/how_to_use_nnunet.md
+
+Example (run all folds of a model):
+
+nnUNetv2_predict_from_modelfolder -i INPUT_FOLDER -o OUTPUT_FOLDER -m MODEL_FOLDER -f all
+
+
+---------------------------------------------------------------------
+Hardware and OS Compatibility
+---------------------------------------------------------------------
+
+The pipeline has been tested on both Linux and Windows systems with high-end NVIDIA GPUs:
+
+Linux (Ubuntu 24.04):
+- Nvidia Titan Xp (12 GB GDDR5)
+- Intel Core i9-12900KF
+- 64 GB RAM
+
+Windows 10:
+- EVGA GeForce RTX 3090 (24 GB GDDR6)
+- Intel Core i9-10900KF
+- 64 GB RAM
+
+
+Notes on Multiprocessing
+------------------------
+- By default, the pipeline is configured for **Linux** and may use multiprocessing during nnU-Net inference.
+- On **Windows**, Python multiprocessing can occasionally fail when running from a clean session.
+- If inference fails on Windows, open `utils.py` and modify the function `run_nnunet_inference` to use **variant 2** (`predict_from_files_sequential`), which disables multiprocessing.
+- This variant is slower but ensures safe and stable execution on Windows systems.
+---
+
+
+
+
 
 ## Running the Pipeline / Inference
 
@@ -177,7 +354,7 @@ To ensure reproducibility, the pipeline always starts from a clean working direc
 **`Database_viewer_final.py`**
 This script is intended for qualitative inspection of the dataset and segmentation results. It loads multiple CT reconstructions from DICOM data, overlays spine and lesion segmentation masks, and visualizes everything using **Napari**.
 
-### Loaded Data
+#### Loaded Data
 
 For a selected patient, the script automatically detects and loads the following DICOM series based on the *SeriesDescription* metadata:
 
@@ -197,7 +374,7 @@ In addition, the script loads precomputed segmentation masks in **NIfTI (.nii.gz
 - Spine segmentation mask
 - Osteolytic lesion segmentation mask
 
-### Visualization Features
+#### Visualization Features
 
 All volumes and segmentation masks are displayed together in a single Napari viewer:
 
