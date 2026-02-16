@@ -1,0 +1,11 @@
+# Core dependencies (install the appropriate torch wheel for your CUDA)
+torch
+torchvision
+
+# nnU-Net (install from source as specified in README)
+git+https://github.com/MIC-DKFZ/nnUNet.git
+
+# DICOM and visualization
+pydicom
+napari
+SimpleITK

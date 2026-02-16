@@ -1,0 +1,3 @@
+[console_scripts]
+spinal-db-viewer = spinal_mm_cli:database_viewer
+spinal-run-nnunet = spinal_mm_cli:run_prediction
