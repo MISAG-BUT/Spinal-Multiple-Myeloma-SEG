@@ -220,12 +220,12 @@ Running the Visualization Script from the Command Line
 -----------------------------------------------------
 The visualization script uses argparse and can be executed directly from the command
 line by specifying only the required paths and patient ID:
-
+```bash
 python Database_viewer_final.py \
   --path_to_DICOM_folders /path/to/MM_DICOM_Dataset \
   --path_to_segmentations /path/to/MM_NIfTI_Segmentation \
   --ID_patient S840
-
+```
 Arguments:
 - --path_to_DICOM_folders
   Path to the DICOM folders, which are organized by patient ID and then by series description
@@ -266,13 +266,13 @@ Pipeline Steps
 Running the Segmentation Pipeline
 --------------------------------
 The segmentation script can be executed from the command line using its argparse interface:
-
+```bash
 python run_prediction_of_nnUNet_networks_on_TCIA_data_final.py \
   --path_to_DICOM_folders /path/to/MM_DICOM_Dataset \
   --nnUNet_results /path/to/nnUNet_trained_models \
   --ID_patient S840 \
   --split_data True
-
+```
 Arguments:
 - --path_to_DICOM_folders
   Path to the DICOM folders organized by patient ID and series description
@@ -286,6 +286,13 @@ Arguments:
 - --split_data
   If True, data are split along the Z-axis to reduce memory requirements
 
+Notes on Multiprocessing
+------------------------
+- By default, the pipeline is configured for **Linux** and may use multiprocessing during nnU-Net inference.
+- On **Windows**, Python multiprocessing can occasionally fail when running from a clean session.
+- If inference fails on Windows, open `utils.py` and modify the function `run_nnunet_inference` to use **variant 2** (`predict_from_files_sequential`), which disables multiprocessing.
+- This variant is slower but ensures safe and stable execution on Windows systems.
+---
 
 ### Command-Line Inference Using nnUNet
 The trained models can also be used with the default nnU-Net CLI for folder-based inference. For inference you can use the default [nnUNet inference functionalities](https://github.com/MIC-DKFZ/nnUNet/blob/master/documentation/how_to_use_nnunet.md). 
@@ -295,30 +302,9 @@ To run a single model on all input images:
 ```bash
 nnUNetv2_predict_from_modelfolder -i INPUT_FOLDER -o OUTPUT_FOLDER -m MODEL_FOLDER -f all
 ```
----------------------------------------------------------------------
-Hardware and OS Compatibility
----------------------------------------------------------------------
-
-The pipeline has been tested on both Linux and Windows systems with high-end NVIDIA GPUs:
-
-- **Linux (Ubuntu 24.04)**  
-  - Nvidia Titan Xp (12 GB GDDR5)  
-  - Intel Core i9-12900KF  
-  - 64 GB RAM  
-
-- **Windows 10**  
-  - EVGA GeForce RTX 3090 (24 GB GDDR6)  
-  - Intel Core i9-10900KF  
-  - 64 GB RAM  
 
 
-Notes on Multiprocessing
-------------------------
-- By default, the pipeline is configured for **Linux** and may use multiprocessing during nnU-Net inference.
-- On **Windows**, Python multiprocessing can occasionally fail when running from a clean session.
-- If inference fails on Windows, open `utils.py` and modify the function `run_nnunet_inference` to use **variant 2** (`predict_from_files_sequential`), which disables multiprocessing.
-- This variant is slower but ensures safe and stable execution on Windows systems.
----
+
 
 
 ## Citation
