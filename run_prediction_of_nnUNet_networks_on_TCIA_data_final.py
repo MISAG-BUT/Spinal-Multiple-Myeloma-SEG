@@ -74,13 +74,13 @@ from utils import *
 # ==========================================================
 # Main pipeline
 # ==========================================================
-def main(base, ID_patient, nnUNet_results, split_data=True):
+def main(path_to_DICOM_folders, ID_patient, nnUNet_results, split_data=True):
     """
     Run the complete segmentation pipeline for a single patient.
 
     Parameters
     ----------
-    base : str
+    path_to_DICOM_folders : str
         Path to the root directory containing patient DICOM data.
     ID_patient : str
         Name of the patient folder (e.g. 'S840').
@@ -94,8 +94,8 @@ def main(base, ID_patient, nnUNet_results, split_data=True):
     # ======================================================
     # 1. Input paths and patient-specific setup
     # ======================================================
-    patient_main_file = join(base, ID_patient)
-    path_to_output_folder = base + "_output"
+    patient_main_file = join(path_to_DICOM_folders, ID_patient)
+    path_to_output_folder = path_to_DICOM_folders + "_output"
 
     # Identify ConvCT and VMI40 DICOM folders
     patient_name, path_to_convCT_folder, path_to_VMI40_folder = find_convCT_and_VMI40_at_DICOM_folder(patient_main_file)
