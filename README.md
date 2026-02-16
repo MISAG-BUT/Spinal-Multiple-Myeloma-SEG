@@ -196,7 +196,7 @@ DICOM series based on the SeriesDescription metadata:
   - 75 Index
   - 100 Index
 
-In addition, the script loads precomputed segmentation masks in **NIfTI (.nii.gz)** format:
+In addition, the script loads segmentation masks in **NIfTI (.nii.gz)** format:
 
 - Spine segmentation mask
 - Osteolytic lesion segmentation mask
