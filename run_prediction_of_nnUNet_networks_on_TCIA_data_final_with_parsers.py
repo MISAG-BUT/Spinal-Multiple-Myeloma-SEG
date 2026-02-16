@@ -104,9 +104,10 @@ def parse_arguments():
     )
 
     parser.add_argument(
-        "--split",
-        action="store_true",
-        help="Split ConvCT volumes along Z-axis to reduce memory usage"
+    "--split",
+    type=lambda x: (str(x).lower() == 'true'),
+    default=True,
+    help="Split ConvCT volumes along Z-axis to reduce memory usage (default: True). Use --split False to disable."
     )
 
     return parser.parse_args()
