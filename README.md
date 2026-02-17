@@ -70,12 +70,6 @@ Check out the official [nnUNet installation instructions](https://github.com/MIC
 First, download and install Python 3.13.x from [python.org](https://www.python.org/downloads/). We used Python 3.13.5.  
 During installation, make sure to check **"Add Python to PATH"**.  
 
-Clone the project repository and move into the project folder:
-
-```bash
-git clone https://github.com/MISAG-BUT/Spinal-Multiple-Myeloma-SEG.git
-cd Spinal-Multiple-Myeloma-SEG
-```
 
 Create a virtual environment inside the project folder. Replace <path-to-your-python-executable> with the path to Python 3.13 on your system:
 ```bash
@@ -117,6 +111,15 @@ pip install -e .
 cd ..
 ```
 
+Clone the project repository and move into the project folder:
+
+```bash
+git clone https://github.com/MISAG-BUT/Spinal-Multiple-Myeloma-SEG.git
+cd Spinal-Multiple-Myeloma-SEG
+pip install -e .
+cd ..
+```
+
 #### Step 3: Additional / Optional  Packages
 Install additional required packages:
 > 💡 **Tip:** Depending on your Linux setup, you may need system libraries for `napari`/Qt to run (e.g., `libxcb-xinerama0`). Install only what you need.
@@ -132,19 +135,23 @@ pip install -U 'napari[all]'
 #### Full Setup Summary
 For convenience, a full setup summary:
 ```bash
-git clone https://github.com/MISAG-BUT/Spinal-Multiple-Myeloma-SEG.git
-cd Spinal-Multiple-Myeloma-SEG
 <path-to-your-python-executable> -m venv venv_run_nnUNet_prediction
 # Activate the environment
 # Windows:
 venv_run_nnUNet_prediction\Scripts\activate
 # Linux/macOS:
 source venv_run_nnUNet_prediction/bin/activate
+
 pip install torch torchvision --index-url https://download.pytorch.org/whl/cu126
 git clone https://github.com/MIC-DKFZ/nnUNet.git
 cd nnUNet
 pip install -e .
 cd ..
+git clone https://github.com/MISAG-BUT/Spinal-Multiple-Myeloma-SEG.git
+cd Spinal-Multiple-Myeloma-SEG
+pip install -e .
+cd ..
+
 # Optional / additional packages
 pip install pydicom napari
 pip install -U 'napari[all]'
