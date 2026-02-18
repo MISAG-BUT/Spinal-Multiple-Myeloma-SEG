@@ -1,4 +1,9 @@
+
 # Spinal-Multiple-Myeloma-SEG
+
+<p align="center">
+  <img src="graphical_abstract.png" alt="Graphical Abstract" width="600"/>
+</p>
 
 ## Overview
 Welcome to the repository for the paper **"Spinal-Multiple-Myeloma-SEG"**! This repository provides the code for the implementation of the networks for segmentation within the popular [nnUNet framework](https://github.com/MIC-DKFZ/nnUNet).
