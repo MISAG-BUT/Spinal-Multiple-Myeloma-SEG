@@ -227,22 +227,37 @@ Running the Visualization Script from the Command Line
 -----------------------------------------------------
 The visualization script uses argparse and can be executed directly from the command
 line by specifying only the required paths and patient ID:
+
+You can run the tool in two equivalent ways:
+### Option 1 – Installed CLI Tool
+
+```bash
+spinal-db-viewer \
+  --path_to_DICOM_folders "/path/to/MM_DICOM_Dataset" \
+  --path_to_segmentations "/path/to/MM_NIfTI_Segmentation" \
+  --ID_patient "S840"
+```
+
+### Option 2 – Run as Python Script
+
 ```bash
 python Database_viewer_final.py \
-  --path_to_DICOM_folders /path/to/MM_DICOM_Dataset \
-  --path_to_segmentations /path/to/MM_NIfTI_Segmentation \
-  --ID_patient S840
+  --path_to_DICOM_folders "/path/to/MM_DICOM_Dataset" \
+  --path_to_segmentations "/path/to/MM_NIfTI_Segmentation" \
+  --ID_patient "S840"
 ```
-Arguments:
-- --path_to_DICOM_folders
-  Path to the DICOM folders, which are organized by patient ID and then by series description
 
-- --path_to_segmentations
-  Path to the NIfTI segmentation masks, which are organized by patient ID and mask type
-  (spine or lesions)
+Both options use identical arguments.
+#### Arguments
 
-- --ID_patient
-  Patient identifier (e.g. S840)
+- `--path_to_DICOM_folders`  
+  Path to the DICOM folders, organized by patient ID and then by series description.
+
+- `--path_to_segmentations`  
+  Path to the NIfTI segmentation masks, organized by patient ID and mask type (`spine` or `lesions`).
+
+- `--ID_patient`  
+  Patient identifier (e.g., `S840`).
 
 
 ---------------------------------------------------------------------
@@ -273,25 +288,37 @@ Pipeline Steps
 Running the Segmentation Pipeline
 --------------------------------
 The segmentation script can be executed from the command line using its argparse interface:
+You can run the segmentation pipeline in two equivalent ways:
+### Option 1 – Run as Python Script
 ```bash
 python run_prediction_of_nnUNet_networks_on_TCIA_data_final.py \
-  --path_to_DICOM_folders /path/to/MM_DICOM_Dataset \
-  --nnUNet_results /path/to/nnUNet_trained_models \
-  --ID_patient S840 \
-  --split_data True
+  --path_to_DICOM_folders "/path/to/MM_DICOM_Dataset" \
+  --path_to_nnunet_results "/path/to/nnUNet_trained_models" \
+  --ID_patient "S840" \
+  --split True
 ```
-Arguments:
-- --path_to_DICOM_folders
-  Path to the DICOM folders organized by patient ID and series description
+### Option 2 – Installed CLI Tool
+```bash
+spinal-run-nnunet \
+  --path_to_DICOM_folders "/path/to/MM_DICOM_Dataset" \
+  --path_to_nnunet_results "/path/to/nnUNet_trained_models" \
+  --ID_patient "S840" \
+  --split True
+```
+Both options use identical arguments.
+#### Arguments
 
-- --nnUNet_results
-  Path to the folder containing trained nnU-Net models
+- `--path_to_DICOM_folders`  
+  Path to the DICOM folders organized by patient ID and series description.
 
-- --ID_patient
-  Patient identifier (e.g. S840)
+- `--path_to_nnunet_results`  
+  Path to the folder containing trained nnU-Net models.
 
-- --split_data
-  If True, data are split along the Z-axis to reduce memory requirements
+- `--ID_patient`  
+  Patient identifier (e.g., `S840`).
+
+- `--split`  
+  If `True`, the data are split along the Z-axis to reduce memory requirements.
 
 Notes on Multiprocessing
 ------------------------
