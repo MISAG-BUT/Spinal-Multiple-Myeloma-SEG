@@ -23,17 +23,14 @@ Created: Jun 24, 2025
 import argparse
 import os
 from os.path import join
-
+import sys
 # Import config for all paths and environment setup
 import config
-
-
+from config import NNUNET_REPO_PATH, NNUNET_RAW, NNUNET_PREPROCESSED, NNUNET_RESULTS_ENV
 
 # Set up nnU-Net environment and sys.path
 def setup_nnunet_env():
-    """Set up sys.path and nnU-Net environment variables from config."""
-    import sys, os
-    from config import NNUNET_REPO_PATH, NNUNET_RAW, NNUNET_PREPROCESSED, NNUNET_RESULTS_ENV
+    """Set up sys.path and nnU-Net environment variables from config."""    
     if NNUNET_REPO_PATH not in sys.path:
         sys.path.append(NNUNET_REPO_PATH)
     os.environ["nnUNet_raw"] = NNUNET_RAW
