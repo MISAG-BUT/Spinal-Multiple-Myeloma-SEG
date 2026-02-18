@@ -58,8 +58,19 @@ from os.path import join
 # Import config for all paths and environment setup
 import config
 
+
 # Set up nnU-Net environment and sys.path
-config.setup_nnunet_env()
+def setup_nnunet_env():
+    """Set up sys.path and nnU-Net environment variables from config."""
+    import sys, os
+    from config import NNUNET_REPO_PATH, NNUNET_RAW, NNUNET_PREPROCESSED, NNUNET_RESULTS_ENV
+    if NNUNET_REPO_PATH not in sys.path:
+        sys.path.append(NNUNET_REPO_PATH)
+    os.environ["nnUNet_raw"] = NNUNET_RAW
+    os.environ["nnUNet_preprocessed"] = NNUNET_PREPROCESSED
+    os.environ["nnUNet_results"] = NNUNET_RESULTS_ENV
+
+setup_nnunet_env()
 
 from utils import *
 
