@@ -296,17 +296,18 @@ Running the Segmentation Pipeline
 --------------------------------
 The segmentation script can be executed from the command line using its argparse interface:
 You can run the segmentation pipeline in two equivalent ways:
-### Option 1 – Run as Python Script
+### Option 1 – Installed CLI Tool
 ```bash
-python run_prediction_of_nnUNet_networks_on_TCIA_data_final.py \
+spinal-run-nnunet \
   --path_to_DICOM_folders "/path/to/MM_DICOM_Dataset" \
   --path_to_nnunet_results "/path/to/nnUNet_trained_models" \
   --ID_patient "S840" \
   --split True
+
 ```
-### Option 2 – Installed CLI Tool
+### Option 2 – IRun as Python Script
 ```bash
-spinal-run-nnunet \
+python run_prediction_of_nnUNet_networks_on_TCIA_data_final.py \
   --path_to_DICOM_folders "/path/to/MM_DICOM_Dataset" \
   --path_to_nnunet_results "/path/to/nnUNet_trained_models" \
   --ID_patient "S840" \
