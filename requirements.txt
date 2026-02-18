@@ -2,10 +2,10 @@
 torch
 torchvision
 
-# nnU-Net (install from source as specified in README)
-git+https://github.com/MIC-DKFZ/nnUNet.git
+# nnU-Net (install from PyPI)
+nnUNet
 
 # DICOM and visualization
 pydicom
-napari
+napari[all]
 SimpleITK
