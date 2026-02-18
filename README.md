@@ -159,6 +159,13 @@ pip install -U 'napari[all]'
 
 Always replace <path-to-your-python-executable> with the correct path on your system. For different CUDA versions or CPU-only setups, check the [PyTorch installation guide](https://pytorch.org/get-started/locally/).
 
+---
+
+## Path Configuration
+Before running the project, you need to edit the `config.py` file and set the correct paths to your data and output directories according to your environment.
+
+---
+
 Running the Pipeline / Inference
 ===============================
 
