@@ -1,10 +1,6 @@
 
 # Spinal-Multiple-Myeloma-SEG
 
-<p align="center">
-  <img src="graphical_abstract.png" alt="Graphical Abstract" width="600"/>
-</p>
-
 ![Graphical Abstract](graphical_abstract.png)
 
 ## Overview
