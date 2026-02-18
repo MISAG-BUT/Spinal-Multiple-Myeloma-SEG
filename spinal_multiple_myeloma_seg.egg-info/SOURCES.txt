@@ -1,9 +1,10 @@
-Database_viewer_final_with_parser_final.py
+Database_viewer_final.py
 LICENSE
 MANIFEST.in
 README.md
+config.py
 pyproject.toml
-run_prediction_of_nnUNet_networks_on_TCIA_data_final_with_parsers_final.py
+run_prediction_of_nnUNet_networks_on_TCIA_data_final.py
 spinal_mm_cli.py
 utils.py
 spinal_multiple_myeloma_seg.egg-info/PKG-INFO

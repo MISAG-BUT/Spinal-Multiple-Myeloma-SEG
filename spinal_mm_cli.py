@@ -11,12 +11,12 @@ def _run_module_by_name(module_name: str):
 
 def database_viewer():
     """Run the database viewer script packaged in this project."""
-    _run_module_by_name("Database_viewer_final_with_parser_final")
+    _run_module_by_name("Database_viewer_final")
 
 
 def run_prediction():
     """Run the nnU-Net prediction pipeline script packaged in this project."""
-    _run_module_by_name("run_prediction_of_nnUNet_networks_on_TCIA_data_final_with_parsers_final")
+    _run_module_by_name("run_prediction_of_nnUNet_networks_on_TCIA_data_final")
 
 
 if __name__ == "__main__":
