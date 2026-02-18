@@ -93,7 +93,7 @@ def load_DICOM_data_SITK(path_to_series):
 # =============================================================================
 
 def run_nnunet_inference(
-    nnunet_results: str,
+    path_to_nnunet_results: str,
     dataset_name: str,
     trainer_name: str,
     use_folds,
@@ -105,7 +105,7 @@ def run_nnunet_inference(
 
     Parameters
     ----------
-    nnunet_results : str
+    path_to_nnunet_results : str
         Path to the trained nnU-Net results folder.
     dataset_name : str
         Dataset identifier used during training.
@@ -142,7 +142,7 @@ def run_nnunet_inference(
     # Initialize the network architecture and load the trained checkpoint
     # -------------------------------------------------------------------------
     predictor.initialize_from_trained_model_folder(
-        join(nnunet_results, dataset_name, trainer_name),
+        join(path_to_nnunet_results, dataset_name, trainer_name),
         use_folds=use_folds,
         checkpoint_name='checkpoint_final.pth',
     )

@@ -39,9 +39,10 @@ spinal-run-nnunet = "spinal_mm_cli:run_prediction"
 [tool.setuptools]
 py-modules = [
     "Database_viewer_final",
-    "Database_viewer_final_with_parser",
+    "Database_viewer_final_with_parser_final",
     "run_prediction_of_nnUNet_networks_on_TCIA_data_final",
-    "run_prediction_of_nnUNet_networks_on_TCIA_data_final_with_parsers",
+    "run_prediction_of_nnUNet_networks_on_TCIA_data_final_with_parsers_final",
     "utils",
     "spinal_mm_cli",
+    "config",
 ]

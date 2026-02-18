@@ -50,23 +50,16 @@ Created: Aug 13, 2025
 # ==========================================================
 # Imports & nnU-Net environment setup
 # ==========================================================
-import os
-import sys
+
 import shutil
 import argparse
 from os.path import join
 
-# Path to your nnU-Net repository (change this to your actual path)
-NNUNET_REPO_PATH = r"F:/Code/nnUNet"  
+# Import config for all paths and environment setup
+import config
 
-if NNUNET_REPO_PATH not in sys.path:
-    sys.path.append(NNUNET_REPO_PATH)
-
-# nnU-Net requires these environment variables to be set.
-# The exact values are not used directly here; they mainly suppress warnings.
-os.environ["nnUNet_raw"] = "nnUNet_project/nnUNet_raw"
-os.environ["nnUNet_preprocessed"] = "nnUNet_project/nnUNet_preprocessed"
-os.environ["nnUNet_results"] = "nnUNet_project/nnUNet_results"
+# Set up nnU-Net environment and sys.path
+config.setup_nnunet_env()
 
 from utils import *
 
@@ -78,10 +71,11 @@ def parse_arguments():
         description="Spinal Multiple Myeloma nnU-Net segmentation pipeline"
     )
 
+
     parser.add_argument(
         "--path_to_DICOM_folders",
         type=str,
-        default="F:/Example_data/DATA/MM_DICOM_Dataset",
+        default=config.PATH_TO_DICOM_FOLDERS,
         help=(
             "Path to the DICOM folders, which are organized by patient ID\n"
             "and then by series description. (e.g. F:/Example_data/DATA/MM_DICOM_Dataset)"
@@ -91,22 +85,22 @@ def parse_arguments():
     parser.add_argument(
         "--ID_patient",
         type=str,
-        default="S840",
+        default=config.ID_PATIENT,
         help="Patient ID folder name (e.g., S840)"
     )
 
     parser.add_argument(
-        "--nnUNet_results",
+        "--path_to_nnunet_results",
         type=str,
-        default="F:/Spinal-Multiple-Myeloma-SEG_nnUNet_models",
+        default=config.PATH_TO_NNUNET_RESULTS,
         help="Path to the trained nnU-Net model folder"
     )
 
     parser.add_argument(
-    "--split",
-    type=lambda x: (str(x).lower() == 'true'),
-    default=True,
-    help="Split ConvCT volumes along Z-axis to reduce memory usage (default: True). Use --split False to disable."
+        "--split",
+        type=lambda x: (str(x).lower() == 'true'),
+        default=config.SPLIT_CONVCT_DEFAULT,
+        help="Split ConvCT volumes along Z-axis to reduce memory usage (default: True). Use --split False to disable."
     )
 
     return parser.parse_args()
@@ -115,7 +109,7 @@ def parse_arguments():
 # ==========================================================
 # Main pipeline
 # ==========================================================
-def main(path_to_DICOM_folders, ID_patient, nnUNet_results, split_data=True):
+def main(path_to_DICOM_folders, ID_patient, path_to_nnunet_results, split_data=True):
     """
     Run the complete segmentation pipeline for a single patient.
 
@@ -125,7 +119,7 @@ def main(path_to_DICOM_folders, ID_patient, nnUNet_results, split_data=True):
         Path to the root directory containing patient DICOM data.
     ID_patient : str
         Name of the patient folder (e.g. 'S840').
-    nnUNet_results : str
+    path_to_nnunet_results : str
         Path to trained nnU-Net models.
     split_data : bool, optional
         If True, images are split along the Z-axis to reduce memory usage.
@@ -212,7 +206,7 @@ def main(path_to_DICOM_folders, ID_patient, nnUNet_results, split_data=True):
     print("Spine segmentation - Prediction with nnU-Net")
 
     run_nnunet_inference(
-        nnUNet_results,
+        path_to_nnunet_results,
         dataset_name="Dataset802_Spine_segmentation_trained_on_VerSe20_and_MM_dataset_together",
         trainer_name="nnUNetTrainer__nnUNetPlans__3d_fullres",
         use_folds=("all",),
@@ -256,7 +250,7 @@ def main(path_to_DICOM_folders, ID_patient, nnUNet_results, split_data=True):
     print("Lesion segmentation - Prediction with nnU-Net")
 
     run_nnunet_inference(
-        nnUNet_results,
+        path_to_nnunet_results,
         dataset_name="Dataset710_MM_Lesion_seg_just_VMI_40",
         trainer_name="nnUNetTrainer__nnUNetPlans__3d_fullres",
         use_folds=("all",),
@@ -288,10 +282,10 @@ def main(path_to_DICOM_folders, ID_patient, nnUNet_results, split_data=True):
 if __name__ == "__main__":
     #base = 'F:/Example_data/DATA/'  # path to the dataset folder
     #path_to_DICOM_folders = join(base, 'MM_DICOM_Dataset')  #path to the DICOM folders, which are organized by patient ID and then by series description
-    #nnUNet_results = "F:/Spinal-Multiple-Myeloma-SEG_nnUNet_models"  #path to the folder containing trained nnU-Net models (should have subfolders for each model)
+    #path_to_nnunet_results = "F:/Spinal-Multiple-Myeloma-SEG_nnUNet_models"  #path to the folder containing trained nnU-Net models (should have subfolders for each model)
     #ID_patient = "S840"    
     #split_data = True # If True, data are split along Z-axis to reduce memory requirements. If False, the full volume is processed at once (requires ~256 GB RAM).
-    #main(path_to_DICOM_folders, ID_patient, nnUNet_results, split_data)
+    #main(path_to_DICOM_folders, ID_patient, path_to_nnunet_results, split_data)
 
     args = parse_arguments()
-    main(args.path_to_DICOM_folders, args.ID_patient, args.nnUNet_results, split_data=args.split)
+    main(args.path_to_DICOM_folders, args.ID_patient, args.path_to_nnunet_results, split_data=args.split)

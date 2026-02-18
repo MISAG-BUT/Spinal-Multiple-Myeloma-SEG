@@ -19,29 +19,17 @@ Created: Jun 24, 2025
 # ==========================================================
 # Imports & nnU-Net environment setup
 # ==========================================================
-import os
-import sys
+
 import argparse
+import os
 from os.path import join
 
-# ----------------------------------------------------------
-# Add nnU-Net repository to Python path
-# ----------------------------------------------------------
-# Path to your nnU-Net repository (change this to your actual path)
-NNUNET_REPO_PATH = r"F:/Code/nnUNet"  
+# Import config for all paths and environment setup
+import config
 
-if NNUNET_REPO_PATH not in sys.path:
-    sys.path.append(NNUNET_REPO_PATH)
 
-# ----------------------------------------------------------
-# nnU-Net environment variables
-# ----------------------------------------------------------
-# These variables are required by nnU-Net.
-# The exact paths are not used in this visualization script;
-# they are defined to avoid nnU-Net warnings.
-os.environ["nnUNet_raw"] = "nnUNet_project/nnUNet_raw"
-os.environ["nnUNet_preprocessed"] = "nnUNet_project/nnUNet_preprocessed"
-os.environ["nnUNet_results"] = "nnUNet_project/nnUNet_results"
+# Set up nnU-Net environment and sys.path
+config.setup_nnunet_env()
 
 
 # ----------------------------------------------------------
@@ -63,7 +51,7 @@ def parse_arguments():
     parser.add_argument(
         "--path_to_DICOM_folders",
         type=str,
-        default="F:/Example_data/DATA/MM_DICOM_Dataset",
+        default=config.PATH_TO_DICOM_FOLDERS,
         help=(
             "Path to the DICOM folders, which are organized by patient ID\n"
             "and then by series description. (e.g. F:/Example_data/DATA/MM_DICOM_Dataset)"
@@ -73,7 +61,7 @@ def parse_arguments():
     parser.add_argument(
         "--path_to_segmentations",
         type=str,
-        default="F:/Example_data/DATA/MM_NIfTI Segmentation",
+        default=config.PATH_TO_SEGMENTATIONS,
         help=(
             "Path to the segmentation masks (NIfTI), which are organized by patient ID\n"
             "and then by mask type (spine or lesions) (e.g. F:/Example_data/DATA/MM_NIfTI Segmentation)."
@@ -83,7 +71,7 @@ def parse_arguments():
     parser.add_argument(
         "--ID_patient",
         type=str,
-        default="S840",
+        default=config.ID_PATIENT,
         help="Patient ID used as the folder name (e.g. S840)"
     )
 
@@ -234,13 +222,11 @@ def main(path_to_DICOM_folders,path_to_segmentations,ID_patient):
 # Entry point
 # ==========================================================
 if __name__ == "__main__":
-
     #base = 'F:/Example_data/DATA/'  # path to the dataset folder
     #path_to_DICOM_folders = join(base, 'MM_DICOM_Dataset')  #path to the DICOM folders, which are organized by patient ID and then by series description
     #path_to_segmentations = join(base, 'MM_NIfTI Segmentation')  #path to the segmentation masks, which are organized by patient ID and then by mask type (spine or lesions)
     #ID_patient = "S840"
     #main(path_to_DICOM_folders, path_to_segmentations, ID_patient)
-
 
     args = parse_arguments()
     main(args.path_to_DICOM_folders, args.path_to_segmentations, args.ID_patient)
