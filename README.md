@@ -1,7 +1,7 @@
 
 # Spinal-Multiple-Myeloma-SEG
 
-![Graphical Abstract](graphical_abstract.png)
+![Graphical Abstract](graphical_abstract.png "Overview of the dataset creation pipeline and data structure.")
 
 ## Overview
 Welcome to the repository for the paper **"Spinal-Multiple-Myeloma-SEG"**! This repository provides the code for the implementation of the networks for segmentation within the popular [nnUNet framework](https://github.com/MIC-DKFZ/nnUNet).
