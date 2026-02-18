@@ -1,8 +1,7 @@
 # config.py
 # Central configuration for all paths and environment variables
-
 # Path to the DICOM folders, organized by patient ID and then by series description
-# Example: F:/Example_data/DATA/MM_DICOM_Dataset/S840
+# Example: F:/Example_data/DATA/MM_DICOM_Dataset
 PATH_TO_DICOM_FOLDERS = r"F:/Example_data/DATA/MM_DICOM_Dataset"
 
 # Path to the segmentation masks (NIfTI), organized by patient ID and then by mask type (spine or lesions)
