@@ -293,6 +293,5 @@ if __name__ == "__main__":
     #split_data = True # If True, data are split along Z-axis to reduce memory requirements. If False, the full volume is processed at once (requires ~256 GB RAM).
     #main(path_to_DICOM_folders, ID_patient, nnUNet_results, split_data)
 
-
     args = parse_arguments()
     main(args.path_to_DICOM_folders, args.ID_patient, args.nnUNet_results, split_data=args.split)

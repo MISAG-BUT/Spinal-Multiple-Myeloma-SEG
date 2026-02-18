@@ -1,5 +1,6 @@
 torch
 torchvision
+nnUNet
 pydicom
-napari
+napari[all]
 SimpleITK

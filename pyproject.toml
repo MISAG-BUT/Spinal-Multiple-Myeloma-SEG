@@ -1,3 +1,47 @@
 [build-system]
 requires = ["setuptools>=61.0", "wheel"]
 build-backend = "setuptools.build_meta"
+
+[project]
+name = "spinal-multiple-myeloma-seg"
+version = "0.1.0"
+description = "Tools and scripts for Spinal-Multiple-Myeloma-SEG"
+readme = "README.md"
+license = {text = "MIT"}
+authors = [
+    {name = "MISAG-BUT"},
+]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Science/Research",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.8",
+    "Programming Language :: Python :: 3.9",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Topic :: Scientific/Engineering :: Medical Science Apps.",
+]
+requires-python = ">=3.8"
+dependencies = [
+    "torch",
+    "torchvision",
+    "nnUNet",
+    "pydicom",
+    "napari[all]",
+    "SimpleITK",
+]
+
+[project.scripts]
+spinal-db-viewer = "spinal_mm_cli:database_viewer"
+spinal-run-nnunet = "spinal_mm_cli:run_prediction"
+
+[tool.setuptools]
+py-modules = [
+    "Database_viewer_final",
+    "Database_viewer_final_with_parser",
+    "run_prediction_of_nnUNet_networks_on_TCIA_data_final",
+    "run_prediction_of_nnUNet_networks_on_TCIA_data_final_with_parsers",
+    "utils",
+    "spinal_mm_cli",
+]
