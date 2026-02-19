@@ -123,17 +123,52 @@ pip install -e .
 cd ..
 ```
 
-#### Step 3: Additional / Optional  Packages
-Install additional required packages:
-> 💡 **Tip:** Depending on your Linux setup, you may need system libraries for `napari`/Qt to run (e.g., `libxcb-xinerama0`). Install only what you need.
+#### Step 3: Additional / Optional Packages (napari / Qt)
+
+The GUI viewer relies on `napari`, which requires a working Qt backend.  
+Depending on your operating system, additional system libraries may be needed.
+
+> 💡 **Tip:** If `napari` fails to start (Qt errors, missing plugins, or XCB issues), install the OS-specific dependencies below.
+
+##### Linux (tested on Ubuntu)
+
+On Linux, you may need extra Qt/XCB system libraries:
+
 ```bash
-# DICOM support
-pip install pydicom
+sudo apt install \
+  libxcb-xinerama0 \
+  libxkbcommon-x11-0 \
+  libxcb-cursor0 \
+  libxcb-icccm4 \
+  libxcb-keysyms1 \
+  libxcb-randr0 \
+  libxcb-render-util0 \
+  libxcb-xfixes0 \
+  libxcb-shape0 \
+  libxcb-sync1 \
+  libxcb-xkb1
+```
+
+Then install the Python packages:
+
+```bash
 # Napari viewer for GUI visualization
 pip install napari
-# Full napari installation with all optional plugins
+
+# Full napari installation with optional plugins (recommended)
 pip install -U 'napari[all]'
 ```
+
+##### Windows
+
+On Windows, installing the full napari package with Qt dependencies is usually sufficient:
+
+```bash
+pip install -U 'napari[all]'
+```
+
+If you experience GUI issues, make sure your environment uses a compatible Qt backend (PyQt5 is installed automatically via `napari[all]`).
+
 
 #### Full Setup Summary
 For convenience, a full setup summary:
