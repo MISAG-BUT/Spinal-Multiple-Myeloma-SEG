@@ -270,11 +270,26 @@ and segmentation outputs.
 
 Running the Visualization Script from the Command Line
 -----------------------------------------------------
-The visualization script uses argparse and can be executed directly from the command
-line by specifying only the required paths and patient ID:
+The visualization tool can be executed from the command line.  
+You can either configure paths in the `config.py` file or provide them directly as arguments.
 
-You can run the tool in two equivalent ways:
-### Option 1 – Installed CLI Tool
+### Option 1 – Use `config.py` (recommended)
+
+If all paths and the patient ID are correctly set in `config.py`, the viewer can be launched without any arguments:
+
+```bash
+spinal-db-viewer
+```
+
+Before running, make sure to edit the following variables in `config.py`:
+- `PATH_TO_DICOM_FOLDERS`
+- `PATH_TO_SEGMENTATIONS`
+- `ID_PATIENT`
+- `NNUNET_REPO_PATH` (required for nnU-Net integration)
+
+This is the simplest and recommended setup for regular use.
+
+### Option 2 – Installed CLI Tool (manual paths)
 
 ```bash
 spinal-db-viewer \
@@ -283,7 +298,7 @@ spinal-db-viewer \
   --ID_patient "S840"
 ```
 
-### Option 2 – Run as Python Script
+### Option 3 – Run as Python Script
 
 ```bash
 python Database_viewer_final.py \
@@ -292,7 +307,9 @@ python Database_viewer_final.py \
   --ID_patient "S840"
 ```
 
-Both options use identical arguments.
+All three options are equivalent.  
+If arguments are not provided, the values defined in `config.py` are used as defaults.
+
 #### Arguments
 
 - `--path_to_DICOM_folders`  
@@ -303,7 +320,6 @@ Both options use identical arguments.
 
 - `--ID_patient`  
   Patient identifier (e.g., `S840`).
-
 
 ---------------------------------------------------------------------
 Full Segmentation Pipeline (Python)
@@ -329,21 +345,40 @@ Pipeline Steps
 4. Lesion segmentation from VMI 40 keV images
 5. Final reconstruction of lesion segmentation in the original image space
 
-
 Running the Segmentation Pipeline
 --------------------------------
-The segmentation script can be executed from the command line using its argparse interface:
-You can run the segmentation pipeline in two equivalent ways:
-### Option 1 – Installed CLI Tool
+The segmentation pipeline can be executed from the command line.  
+You can either configure paths in the `config.py` file or provide them directly as arguments.
+
+### Option 1 – Use `config.py` (recommended)
+
+If all paths and settings are correctly defined in `config.py`, the pipeline can be launched without any arguments:
+
+```bash
+spinal-run-nnunet
+```
+
+Before running, make sure to set the following variables in `config.py`:
+- `PATH_TO_DICOM_FOLDERS`
+- `PATH_TO_NNUNET_RESULTS`
+- `ID_PATIENT`
+- `NNUNET_REPO_PATH` (required for nnU-Net integration)
+- `SPLIT_CONVCT_DEFAULT` (default split behavior)
+
+This is the simplest and recommended setup for regular use.
+
+### Option 2 – Installed CLI Tool (manual paths)
+
 ```bash
 spinal-run-nnunet \
   --path_to_DICOM_folders "/path/to/MM_DICOM_Dataset" \
   --path_to_nnunet_results "/path/to/nnUNet_trained_models" \
   --ID_patient "S840" \
   --split True
-
 ```
-### Option 2 – IRun as Python Script
+
+### Option 3 – Run as Python Script
+
 ```bash
 python run_prediction_of_nnUNet_networks_on_TCIA_data_final.py \
   --path_to_DICOM_folders "/path/to/MM_DICOM_Dataset" \
@@ -351,7 +386,10 @@ python run_prediction_of_nnUNet_networks_on_TCIA_data_final.py \
   --ID_patient "S840" \
   --split True
 ```
-Both options use identical arguments.
+
+All three options are equivalent.  
+If arguments are not provided, the values defined in `config.py` are used as defaults.
+
 #### Arguments
 
 - `--path_to_DICOM_folders`  
@@ -365,6 +403,7 @@ Both options use identical arguments.
 
 - `--split`  
   If `True`, the data are split along the Z-axis to reduce memory requirements.
+
 
 Notes on Multiprocessing
 ------------------------
