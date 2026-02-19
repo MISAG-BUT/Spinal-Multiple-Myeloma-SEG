@@ -8,14 +8,20 @@ Welcome to the repository for the paper **"Spinal-Multiple-Myeloma-SEG"**! This 
 
 ### Read the [paper](TO BE Updated): 
 
-Authors:  
-Michal Nohel, Vlatimil Valek, Tomas Rohan, Martin Stork, Roman Jakubcek, Jiri Chmelik and Marek Dostal 
+**Authors:** Michal Nohel<sup>1,†</sup>, Vlastimil Valek<sup>2,3,†</sup>, Tomas Rohan<sup>2,3</sup>, Martin Stork<sup>4</sup>, Roman Jakubicek<sup>1</sup>, Jiri Chmelik<sup>1,††,</sup>*, Marek Dostal<sup>2,5,††,*</sup>*
 
-Author Affiliations:  
-Department of Biomedical Engineering, Faculty of Electrical Engineering and Communication, Brno University of Technology, Brno, Czech Republic
-Department of Radiology and Nuclear Medicine, University Hospital Brno and Masaryk University, Brno, Czech Republic
-Internal Hematology and Oncology Clinic, University Hospital Brno, Brno, Czech Republic
-Department of Biophysics, Masaryk University, Brno, Czech Republic
+**Author Affiliations:**  
+<sup>1</sup> Department of Biomedical Engineering, Faculty of Electrical Engineering and Communication, Brno University of Technology, Brno, Czech Republic  
+<sup>2</sup> Department of Radiology and Nuclear Medicine, University Hospital Brno, Brno, Czech Republic  
+<sup>3</sup> Department of Radiology and Nuclear Medicine, Faculty of Medicine, Masaryk University, Brno, Czech Republic  
+<sup>4</sup> Internal Hematology and Oncology Clinic, University Hospital Brno, Brno, Czech Republic  
+<sup>5</sup> Department of Biophysics, Masaryk University, Brno, Czech Republic  
+
+<sup>*</sup> Corresponding authors: Marek Dostal (Dostal.Marek@fnbrno.cz), Jiri Chmelik (chmelikj@vut.cz)  
+<sup>†</sup> These authors contributed equally to this work  
+<sup>††</sup> These authors contributed equally to this work
+
+
 
 The repository contains two main scripts:  
 1. A script for visualizing the dataset, allowing you to explore the spinal and myeloma images used.  
