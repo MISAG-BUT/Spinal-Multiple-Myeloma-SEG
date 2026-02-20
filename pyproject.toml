@@ -26,7 +26,6 @@ requires-python = ">=3.8"
 dependencies = [
     "torch",
     "torchvision",
-    "nnUNet",
     "pydicom",
     "napari[all]",
     "SimpleITK",

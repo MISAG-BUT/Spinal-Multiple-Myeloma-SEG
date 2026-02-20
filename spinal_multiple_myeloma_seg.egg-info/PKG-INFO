@@ -18,27 +18,35 @@ Description-Content-Type: text/markdown
 License-File: LICENSE
 Requires-Dist: torch
 Requires-Dist: torchvision
-Requires-Dist: nnUNet
 Requires-Dist: pydicom
 Requires-Dist: napari[all]
 Requires-Dist: SimpleITK
 Dynamic: license-file
 
+
 # Spinal-Multiple-Myeloma-SEG
+
+![Graphical Abstract](graphical_abstract.png "Overview of the dataset creation pipeline and data structure.")
 
 ## Overview
 Welcome to the repository for the paper **"Spinal-Multiple-Myeloma-SEG"**! This repository provides the code for the implementation of the networks for segmentation within the popular [nnUNet framework](https://github.com/MIC-DKFZ/nnUNet).
 
 ### Read the [paper](TO BE Updated): 
 
-Authors:  
-Michal Nohel, Vlatimil Valek, Tomas Rohan, Martin Stork, Roman Jakubcek, Jiri Chmelik and Marek Dostal 
+**Authors:** Michal Nohel<sup>1,†</sup>, Vlastimil Valek<sup>2,3,†</sup>, Tomas Rohan<sup>2,3</sup>, Martin Stork<sup>4</sup>, Roman Jakubicek<sup>1</sup>, Jiri Chmelik<sup>1,††,</sup>*, Marek Dostal<sup>2,5,††,*</sup>*
 
-Author Affiliations:  
-Department of Biomedical Engineering, Faculty of Electrical Engineering and Communication, Brno University of Technology, Brno, Czech Republic
-Department of Radiology and Nuclear Medicine, University Hospital Brno and Masaryk University, Brno, Czech Republic
-Internal Hematology and Oncology Clinic, University Hospital Brno, Brno, Czech Republic
-Department of Biophysics, Masaryk University, Brno, Czech Republic
+**Author Affiliations:**  
+<sup>1</sup> Department of Biomedical Engineering, Faculty of Electrical Engineering and Communication, Brno University of Technology, Brno, Czech Republic  
+<sup>2</sup> Department of Radiology and Nuclear Medicine, University Hospital Brno, Brno, Czech Republic  
+<sup>3</sup> Department of Radiology and Nuclear Medicine, Faculty of Medicine, Masaryk University, Brno, Czech Republic  
+<sup>4</sup> Internal Hematology and Oncology Clinic, University Hospital Brno, Brno, Czech Republic  
+<sup>5</sup> Department of Biophysics, Masaryk University, Brno, Czech Republic  
+
+<sup>*</sup> Corresponding authors: Marek Dostal (Dostal.Marek@fnbrno.cz), Jiri Chmelik (chmelikj@vut.cz)  
+<sup>†</sup> These authors contributed equally to this work  
+<sup>††</sup> These authors contributed equally to this work
+
+
 
 The repository contains two main scripts:  
 1. A script for visualizing the dataset, allowing you to explore the spinal and myeloma images used.  
@@ -146,17 +154,52 @@ pip install -e .
 cd ..
 ```
 
-#### Step 3: Additional / Optional  Packages
-Install additional required packages:
-> 💡 **Tip:** Depending on your Linux setup, you may need system libraries for `napari`/Qt to run (e.g., `libxcb-xinerama0`). Install only what you need.
+#### Step 3: Additional / Optional Packages (napari / Qt)
+
+The GUI viewer relies on `napari`, which requires a working Qt backend.  
+Depending on your operating system, additional system libraries may be needed.
+
+> 💡 **Tip:** If `napari` fails to start (Qt errors, missing plugins, or XCB issues), install the OS-specific dependencies below.
+
+##### Linux (tested on Ubuntu)
+
+On Linux, you may need extra Qt/XCB system libraries:
+
 ```bash
-# DICOM support
-pip install pydicom
+sudo apt install \
+  libxcb-xinerama0 \
+  libxkbcommon-x11-0 \
+  libxcb-cursor0 \
+  libxcb-icccm4 \
+  libxcb-keysyms1 \
+  libxcb-randr0 \
+  libxcb-render-util0 \
+  libxcb-xfixes0 \
+  libxcb-shape0 \
+  libxcb-sync1 \
+  libxcb-xkb1
+```
+
+Then install the Python packages:
+
+```bash
 # Napari viewer for GUI visualization
 pip install napari
-# Full napari installation with all optional plugins
+
+# Full napari installation with optional plugins (recommended)
 pip install -U 'napari[all]'
 ```
+
+##### Windows
+
+On Windows, installing the full napari package with Qt dependencies is usually sufficient:
+
+```bash
+pip install -U 'napari[all]'
+```
+
+If you experience GUI issues, make sure your environment uses a compatible Qt backend (PyQt5 is installed automatically via `napari[all]`).
+
 
 #### Full Setup Summary
 For convenience, a full setup summary:
@@ -184,6 +227,13 @@ pip install -U 'napari[all]'
 ```
 
 Always replace <path-to-your-python-executable> with the correct path on your system. For different CUDA versions or CPU-only setups, check the [PyTorch installation guide](https://pytorch.org/get-started/locally/).
+
+---
+
+## Path Configuration
+Before running the project, you need to edit the `config.py` file and set the correct paths to your data and output directories according to your environment.
+
+---
 
 Running the Pipeline / Inference
 ===============================
@@ -251,25 +301,56 @@ and segmentation outputs.
 
 Running the Visualization Script from the Command Line
 -----------------------------------------------------
-The visualization script uses argparse and can be executed directly from the command
-line by specifying only the required paths and patient ID:
+The visualization tool can be executed from the command line.  
+You can either configure paths in the `config.py` file or provide them directly as arguments.
+
+### Option 1 – Use `config.py` (recommended)
+
+If all paths and the patient ID are correctly set in `config.py`, the viewer can be launched without any arguments:
+
+```bash
+spinal-db-viewer
+```
+
+Before running, make sure to edit the following variables in `config.py`:
+- `PATH_TO_DICOM_FOLDERS`
+- `PATH_TO_SEGMENTATIONS`
+- `ID_PATIENT`
+- `NNUNET_REPO_PATH` (required for nnU-Net integration)
+
+This is the simplest and recommended setup for regular use.
+
+### Option 2 – Installed CLI Tool (manual paths)
+
+```bash
+spinal-db-viewer \
+  --path_to_DICOM_folders "/path/to/MM_DICOM_Dataset" \
+  --path_to_segmentations "/path/to/MM_NIfTI_Segmentation" \
+  --ID_patient "S840"
+```
+
+### Option 3 – Run as Python Script
+
 ```bash
 python Database_viewer_final.py \
-  --path_to_DICOM_folders /path/to/MM_DICOM_Dataset \
-  --path_to_segmentations /path/to/MM_NIfTI_Segmentation \
-  --ID_patient S840
+  --path_to_DICOM_folders "/path/to/MM_DICOM_Dataset" \
+  --path_to_segmentations "/path/to/MM_NIfTI_Segmentation" \
+  --ID_patient "S840"
 ```
-Arguments:
-- --path_to_DICOM_folders
-  Path to the DICOM folders, which are organized by patient ID and then by series description
 
-- --path_to_segmentations
-  Path to the NIfTI segmentation masks, which are organized by patient ID and mask type
-  (spine or lesions)
+All three options are equivalent.  
+If arguments are not provided, the values defined in `config.py` are used as defaults.
 
-- --ID_patient
-  Patient identifier (e.g. S840)
+#### Arguments
 
+- `--path_to_DICOM_folders`  
+  Path to the DICOM folders, organized by patient ID and then by series description.
+
+- `--path_to_segmentations`  
+  Path to the NIfTI segmentation masks, organized by patient ID and mask type (`spine` or `lesions`).
+
+- `--ID_patient`  
+  Patient identifier (e.g., `S840`).
 
 ---------------------------------------------------------------------
 Full Segmentation Pipeline (Python)
@@ -295,29 +376,65 @@ Pipeline Steps
 4. Lesion segmentation from VMI 40 keV images
 5. Final reconstruction of lesion segmentation in the original image space
 
-
 Running the Segmentation Pipeline
 --------------------------------
-The segmentation script can be executed from the command line using its argparse interface:
+The segmentation pipeline can be executed from the command line.  
+You can either configure paths in the `config.py` file or provide them directly as arguments.
+
+### Option 1 – Use `config.py` (recommended)
+
+If all paths and settings are correctly defined in `config.py`, the pipeline can be launched without any arguments:
+
+```bash
+spinal-run-nnunet
+```
+
+Before running, make sure to set the following variables in `config.py`:
+- `PATH_TO_DICOM_FOLDERS`
+- `PATH_TO_NNUNET_RESULTS`
+- `ID_PATIENT`
+- `NNUNET_REPO_PATH` (required for nnU-Net integration)
+- `SPLIT_CONVCT_DEFAULT` (default split behavior)
+
+This is the simplest and recommended setup for regular use.
+
+### Option 2 – Installed CLI Tool (manual paths)
+
+```bash
+spinal-run-nnunet \
+  --path_to_DICOM_folders "/path/to/MM_DICOM_Dataset" \
+  --path_to_nnunet_results "/path/to/nnUNet_trained_models" \
+  --ID_patient "S840" \
+  --split True
+```
+
+### Option 3 – Run as Python Script
+
 ```bash
 python run_prediction_of_nnUNet_networks_on_TCIA_data_final.py \
-  --path_to_DICOM_folders /path/to/MM_DICOM_Dataset \
-  --nnUNet_results /path/to/nnUNet_trained_models \
-  --ID_patient S840 \
-  --split_data True
+  --path_to_DICOM_folders "/path/to/MM_DICOM_Dataset" \
+  --path_to_nnunet_results "/path/to/nnUNet_trained_models" \
+  --ID_patient "S840" \
+  --split True
 ```
-Arguments:
-- --path_to_DICOM_folders
-  Path to the DICOM folders organized by patient ID and series description
 
-- --nnUNet_results
-  Path to the folder containing trained nnU-Net models
+All three options are equivalent.  
+If arguments are not provided, the values defined in `config.py` are used as defaults.
 
-- --ID_patient
-  Patient identifier (e.g. S840)
+#### Arguments
 
-- --split_data
-  If True, data are split along the Z-axis to reduce memory requirements
+- `--path_to_DICOM_folders`  
+  Path to the DICOM folders organized by patient ID and series description.
+
+- `--path_to_nnunet_results`  
+  Path to the folder containing trained nnU-Net models.
+
+- `--ID_patient`  
+  Patient identifier (e.g., `S840`).
+
+- `--split`  
+  If `True`, the data are split along the Z-axis to reduce memory requirements.
+
 
 Notes on Multiprocessing
 ------------------------
