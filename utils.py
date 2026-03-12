@@ -72,7 +72,9 @@ def find_convCT_and_VMI40_at_DICOM_folder(patient_main_file):
 
         if series_description.endswith("_konv"):
             path_to_convCT_folder = DICOM_folder_path
-            patient_name = series_description[:8]
+            patient_name = series_description[:-5]
+
+
         elif series_description == 'MonoE 40keV[HU]':
             path_to_VMI40_folder = DICOM_folder_path
         else:
@@ -356,7 +358,8 @@ def reorient_spine_segmentation_to_original_space(
             src_path = os.path.join(working_folder_Spine_segmentation_in_RAS, filename)
             dst_path = os.path.join(
                 working_folder_Spine_segmentation_final,
-                filename[:8] + '_spine_segmentation.nii.gz'
+                #filename[:8] + '_spine_segmentation.nii.gz'
+                filename[:-16] + '_spine_segmentation.nii.gz'
             )
             shutil.copy(src_path, dst_path)
 
@@ -366,7 +369,8 @@ def reorient_spine_segmentation_to_original_space(
             src_path = os.path.join(working_folder_conv_CT_in_RAS, filename)
             dst_path = os.path.join(
                 working_folder_Spine_segmentation_final,
-                filename[:8] + '_spine_segmentation_originalAffine.pkl'
+                #filename[:8] + '_spine_segmentation_originalAffine.pkl'
+                filename[:-33] + '_spine_segmentation_originalAffine.pkl'
             )
             shutil.copy(src_path, dst_path)
 
@@ -394,7 +398,8 @@ def prepare_data_for_lesion_segmentation(
     for filename in os.listdir(working_folder_Spine_segmentation_final):
         if filename.endswith(".nii.gz"):
             spine_segmentation_path = os.path.join(working_folder_Spine_segmentation_final, filename)
-            patient_name = filename[:8]  # update patient_name based on file
+            #patient_name = filename[:8]  # update patient_name based on file
+            patient_name = filename[:-26]  # update patient_name based on file
             break
 
     # Load spine segmentation and convert to binary mask
