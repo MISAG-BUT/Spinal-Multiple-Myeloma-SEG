@@ -12,7 +12,7 @@ PATH_TO_SEGMENTATIONS = r"/home/nohel/DATA/Example_data/DATA/MM_NIfTI Segmentati
 # Default patient ID (used as folder name)
 # Example: S840
 # ID_PATIENT = "S840"
-ID_PATIENT = "Myel_012_a"
+ID_PATIENT = "Myel_012_b"
 
 # Path to the folder containing trained nnU-Net models (should have subfolders for each model)
 # Example: F:/Spinal-Multiple-Myeloma-SEG_nnUNet_models/Dataset802_Spine_segmentation_trained_on_VerSe20_and_MM_dataset_together
