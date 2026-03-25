@@ -52,6 +52,19 @@ def subfiles(folder: str, join: bool = True, prefix: str = None, suffix: str = N
 # =============================================================================
 # DICOM Utilities
 # =============================================================================
+def find_dicom_series(root_path):
+    """Recursively find folders that contain DICOM files."""
+    dicom_series_folders = []
+
+    for root, dirs, files in os.walk(root_path):
+        dicom_files = [f for f in files if f != "DIRFILE"]
+
+        if len(dicom_files) > 0:
+            dicom_series_folders.append(root)
+
+    return dicom_series_folders
+
+
 def find_convCT_and_VMI40_at_DICOM_folder(patient_main_file):
     """
     Search for conventional CT (_konv) and MonoE 40keV series in a patient's folder.

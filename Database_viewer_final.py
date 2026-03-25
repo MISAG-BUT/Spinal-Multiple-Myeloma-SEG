@@ -43,7 +43,7 @@ setup_nnunet_env()
 # ----------------------------------------------------------
 # Project-specific imports
 # ----------------------------------------------------------
-from utils import load_DICOM_data_SITK
+from utils import find_dicom_series, load_DICOM_data_SITK
 import SimpleITK as sitk
 import pydicom
 import napari
@@ -106,10 +106,7 @@ def main(path_to_DICOM_folders,path_to_segmentations,ID_patient):
     # ------------------------------------------------------
     # Identify all DICOM series folders
     # ------------------------------------------------------
-    DICOM_folders_all = [
-        f for f in os.listdir(patient_main_file)
-        if os.path.isdir(join(patient_main_file, f))
-    ]
+    DICOM_folders_all = find_dicom_series(patient_main_file)
 
     print("\nFound DICOM series:")
     for folder in DICOM_folders_all:
@@ -120,11 +117,9 @@ def main(path_to_DICOM_folders,path_to_segmentations,ID_patient):
     # ======================================================
     print("\nLoading DICOM volumes...")
 
-    for DICOM_folder in DICOM_folders_all:
+    for DICOM_folder_path in DICOM_folders_all:
 
-        DICOM_folder_path = join(patient_main_file, DICOM_folder)
-
-        # Load all DICOM files except DIRFILE
+        # Load all DICOM files except DIRFILE and Segmentation series (if present in DICOM)
         DICOM_files = [
             join(DICOM_folder_path, f)
             for f in os.listdir(DICOM_folder_path)
@@ -156,6 +151,9 @@ def main(path_to_DICOM_folders,path_to_segmentations,ID_patient):
 
         elif series_description == "MonoE 120keV[HU]":
             VMI120_zxy = load_DICOM_data_SITK(DICOM_folder_path)
+
+        elif series_description == "Segmentation":
+            continue  # Skip segmentation series if present in DICOM (we will load NIfTI masks instead)        
 
         else:
             # Fallback: assume this is conventional CT
@@ -231,13 +229,15 @@ def main(path_to_DICOM_folders,path_to_segmentations,ID_patient):
 # ==========================================================
 if __name__ == "__main__":
     #base = 'F:/Example_data/DATA/'  # path to the dataset folder
-    #path_to_DICOM_folders = join(base, 'MM_DICOM_Dataset')  #path to the DICOM folders, which are organized by patient ID and then by series description
-    #path_to_segmentations = join(base, 'MM_NIfTI Segmentation')  #path to the segmentation masks, which are organized by patient ID and then by mask type (spine or lesions)
-    #ID_patient = "S840"
-    #main(path_to_DICOM_folders, path_to_segmentations, ID_patient)
+    base = '/home/nohel/DATA/Example_data/DATA'
+    #path_to_DICOM_folders = join(base, 'MM_DICOM_Dataset')
+    path_to_DICOM_folders = join(base, 'Spinal-Multiple-Myeloma-SEG')  #path to the DICOM folders, which are organized by patient ID and then by series description
+    path_to_segmentations = join(base, 'MM_NIfTI Segmentation')  #path to the segmentation masks, which are organized by patient ID and then by mask type (spine or lesions)
+    ID_patient = "Myel_012_a"
+    main(path_to_DICOM_folders, path_to_segmentations, ID_patient)
 
-    args = parse_arguments()
-    main(args.path_to_DICOM_folders, args.path_to_segmentations, args.ID_patient)
+    #args = parse_arguments()
+    #main(args.path_to_DICOM_folders, args.path_to_segmentations, args.ID_patient)
 
     
 
