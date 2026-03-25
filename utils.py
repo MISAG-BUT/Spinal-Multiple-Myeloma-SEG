@@ -70,11 +70,13 @@ def find_convCT_and_VMI40_at_DICOM_folder(patient_main_file):
     Search for conventional CT (_konv) and MonoE 40keV series in a patient's folder.
     Returns patient name, path to convCT, and path to VMI40 series.
     """
-    DICOM_folders_all = [
-        f for f in os.listdir(patient_main_file)
-        if os.path.isdir(os.path.join(patient_main_file, f))
-    ]
-    print(DICOM_folders_all)    
+
+    print(f"DICOM root: {patient_main_file}")
+    DICOM_folders_all = find_dicom_series(patient_main_file)
+    print("\nFound DICOM series:")
+    for folder in DICOM_folders_all:
+        print(f"  - {folder}")
+
     print('Searching for convCT and VMI40 data...')
 
     for DICOM_folder in DICOM_folders_all:
