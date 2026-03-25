@@ -289,11 +289,15 @@ def main(path_to_DICOM_folders, ID_patient, path_to_nnunet_results, split_data=T
 # ==========================================================
 if __name__ == "__main__":
     #base = 'F:/Example_data/DATA/'  # path to the dataset folder
+    base = '/home/nohel/DATA/Example_data/DATA'  # path to the dataset folder
     #path_to_DICOM_folders = join(base, 'MM_DICOM_Dataset')  #path to the DICOM folders, which are organized by patient ID and then by series description
+    path_to_DICOM_folders = join(base, 'Spinal-Multiple-Myeloma-SEG')
     #path_to_nnunet_results = "F:/Spinal-Multiple-Myeloma-SEG_nnUNet_models"  #path to the folder containing trained nnU-Net models (should have subfolders for each model)
-    #ID_patient = "S840"    
-    #split_data = True # If True, data are split along Z-axis to reduce memory requirements. If False, the full volume is processed at once (requires ~256 GB RAM).
-    #main(path_to_DICOM_folders, ID_patient, path_to_nnunet_results, split_data)
+    path_to_nnunet_results = "/home/nohel/DATA/Example_data/Spinal-Multiple-Myeloma-SEG_nnUNet_models"
+    #ID_patient = "S840"   
+    ID_patient = "Myel_012_a"  
+    split_data = True # If True, data are split along Z-axis to reduce memory requirements. If False, the full volume is processed at once (requires ~256 GB RAM).
+    main(path_to_DICOM_folders, ID_patient, path_to_nnunet_results, split_data)
 
-    args = parse_arguments()
-    main(args.path_to_DICOM_folders, args.ID_patient, args.path_to_nnunet_results, split_data=args.split)
+    #args = parse_arguments()
+    #main(args.path_to_DICOM_folders, args.ID_patient, args.path_to_nnunet_results, split_data=args.split)
