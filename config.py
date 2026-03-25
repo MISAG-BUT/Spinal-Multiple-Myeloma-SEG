@@ -13,7 +13,7 @@ PATH_TO_SEGMENTATIONS = r"/home/nohel/DATA/Example_data/DATA/MM_NIfTI Segmentati
 ID_PATIENT = "Myel_001"
 
 # Path to the folder containing trained nnU-Net models (should have subfolders for each model)
-# Example: F:/Spinal-Multiple-Myeloma-SEG_nnUNet_models/Dataset802_Spine_segmentation_trained_on_VerSe20_and_MM_dataset_together
+# Example: F:/Spinal-Multiple-Myeloma-SEG_nnUNet_models
 PATH_TO_NNUNET_RESULTS = r"/home/nohel/DATA/Example_data/Spinal-Multiple-Myeloma-SEG_nnUNet_models"
 
 # Default for split option in prediction pipeline
