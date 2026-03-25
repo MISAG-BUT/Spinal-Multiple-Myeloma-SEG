@@ -159,8 +159,8 @@ def main(path_to_DICOM_folders,path_to_segmentations,ID_patient):
             # Fallback: assume this is conventional CT
             ConvCT_zxy = load_DICOM_data_SITK(DICOM_folder_path)
 
-            # Extract patient name (first 8 characters)
-            patient_name = series_description[:8]
+            # Extract patient name (remove _conv suffix if present)
+            patient_name = series_description[:-5]
 
     # ======================================================
     # Load segmentation masks (NIfTI)
@@ -229,15 +229,13 @@ def main(path_to_DICOM_folders,path_to_segmentations,ID_patient):
 # ==========================================================
 if __name__ == "__main__":
     #base = 'F:/Example_data/DATA/'  # path to the dataset folder
-    base = '/home/nohel/DATA/Example_data/DATA'
-    #path_to_DICOM_folders = join(base, 'MM_DICOM_Dataset')
-    path_to_DICOM_folders = join(base, 'Spinal-Multiple-Myeloma-SEG')  #path to the DICOM folders, which are organized by patient ID and then by series description
-    path_to_segmentations = join(base, 'MM_NIfTI Segmentation')  #path to the segmentation masks, which are organized by patient ID and then by mask type (spine or lesions)
-    ID_patient = "Myel_012_a"
-    main(path_to_DICOM_folders, path_to_segmentations, ID_patient)
+    #path_to_DICOM_folders = join(base, 'Spinal-Multiple-Myeloma-SEG')  #path to the DICOM folders, which are organized by patient ID and then by series description
+    #path_to_segmentations = join(base, 'MM_NIfTI Segmentation')  #path to the segmentation masks, which are organized by patient ID and then by mask type (spine or lesions)
+    #ID_patient = "Myel_001"
+    #main(path_to_DICOM_folders, path_to_segmentations, ID_patient)
 
-    #args = parse_arguments()
-    #main(args.path_to_DICOM_folders, args.path_to_segmentations, args.ID_patient)
+    args = parse_arguments()
+    main(args.path_to_DICOM_folders, args.path_to_segmentations, args.ID_patient)
 
     
 
