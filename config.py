@@ -2,7 +2,6 @@
 # Central configuration for all paths and environment variables
 # Path to the DICOM folders, organized by patient ID and then by series description
 # Example: F:/Example_data/DATA/MM_DICOM_Dataset
-#PATH_TO_DICOM_FOLDERS = r"/home/nohel/DATA/Example_data/DATA/MM_DICOM_Dataset"
 PATH_TO_DICOM_FOLDERS = r"/home/nohel/DATA/Example_data/DATA/Spinal-Multiple-Myeloma-SEG"
 
 # Path to the segmentation masks (NIfTI), organized by patient ID and then by mask type (spine or lesions)
@@ -10,9 +9,8 @@ PATH_TO_DICOM_FOLDERS = r"/home/nohel/DATA/Example_data/DATA/Spinal-Multiple-Mye
 PATH_TO_SEGMENTATIONS = r"/home/nohel/DATA/Example_data/DATA/MM_NIfTI Segmentation"
 
 # Default patient ID (used as folder name)
-# Example: S840
-# ID_PATIENT = "S840"
-ID_PATIENT = "Myel_012_b"
+# Example: Myel_001
+ID_PATIENT = "Myel_001"
 
 # Path to the folder containing trained nnU-Net models (should have subfolders for each model)
 # Example: F:/Spinal-Multiple-Myeloma-SEG_nnUNet_models/Dataset802_Spine_segmentation_trained_on_VerSe20_and_MM_dataset_together
