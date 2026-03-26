@@ -6,7 +6,7 @@ PATH_TO_DICOM_FOLDERS = r"/home/nohel/DATA/Example_data/DATA/Spinal-Multiple-Mye
 
 # Path to the segmentation masks (NIfTI), organized by patient ID and then by mask type (spine or lesions)
 # Example: F:/Example_data/DATA/MM_NIfTI Segmentation
-PATH_TO_SEGMENTATIONS = r"/home/nohel/DATA/Example_data/DATA/MM_NIfTI Segmentation"
+PATH_TO_SEGMENTATIONS = r"/home/nohel/DATA/Example_data/DATA/MM_NIfTI_Segmentation"
 
 # Default patient ID (used as folder name)
 # Example: Myel_001
