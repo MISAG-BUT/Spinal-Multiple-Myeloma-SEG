@@ -128,7 +128,7 @@ def main(path_to_convCT_nifti, path_to_VMI40_nifti, path_to_output_folder, path_
 
     convCT_dst = join(
         working_folder_conv_CT,
-        patient_name + "_konv_0000.nii.gz"
+        patient_name + "_conv_RAS_0000.nii.gz"
     )
 
     shutil.copy(path_to_convCT_nifti, convCT_dst)
