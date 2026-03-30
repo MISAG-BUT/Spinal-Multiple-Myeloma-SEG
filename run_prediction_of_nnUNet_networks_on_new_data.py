@@ -77,6 +77,49 @@ def get_patient_name(path):
     else:
         raise ValueError(f"Unsupported input path: {path}")
 
+# ==========================================================
+# Argument parser
+# ==========================================================
+def parse_arguments():
+    parser = argparse.ArgumentParser(
+        description="Spinal Multiple Myeloma nnU-Net segmentation pipeline (NIfTI input)"
+    )
+
+    parser.add_argument(
+        "--path_to_convCT_nifti",
+        dest="path_to_convCT_nifti",
+        type=str,
+        default=config.PATH_TO_CONVCT_NIFTI,
+        help="Path to ConvCT NIfTI file (.nii or .nii.gz)"
+    )
+    parser.add_argument(
+        "--path_to_VMI40_nifti",
+        dest="path_to_VMI40_nifti",
+        type=str,
+        default=config.PATH_TO_VMI40_NIFTI,
+        help="Path to VMI40 NIfTI file (.nii or .nii.gz)"
+    )
+    parser.add_argument(
+        "--path_to_output_folder",
+        dest="path_to_output_folder",
+        type=str,
+        default=config.PATH_TO_OUTPUT_FOLDER,
+        help="Path to output folder"
+    )
+    parser.add_argument(
+        "--path_to_nnunet_results",
+        type=str,
+        default=config.PATH_TO_NNUNET_RESULTS,
+        help="Path to the trained nnU-Net model folder"
+    )
+    parser.add_argument(
+        "--split",
+        type=lambda x: (str(x).lower() == 'true'),
+        default=config.SPLIT_CONVCT_DEFAULT,
+        help="Split ConvCT volumes along Z-axis to reduce memory usage (default: True). Use --split False to disable."
+    )
+
+    return parser.parse_args()
 
 # ==========================================================
 # Main pipeline
@@ -245,16 +288,19 @@ def main(path_to_convCT_nifti, path_to_VMI40_nifti, path_to_output_folder, path_
 
 if __name__ == "__main__":
 
-    path_to_convCT_nifti = "F:/Example_data/DATA/New_Data/Myel_001_conv.nii.gz"
-    path_to_VMI40_nifti = "F:/Example_data/DATA/New_Data/Myel_001_monoe_40kev.nii.gz"
-    path_to_output_folder = "F:/Example_data/DATA/New_Data/Output_folder"
-    path_to_nnunet_results = "F:/Spinal-Multiple-Myeloma-SEG_nnUNet_models"
-    split_data = True
+    #path_to_convCT_nifti = "F:/Example_data/DATA/New_Data/Myel_001_conv.nii.gz"
+    #path_to_VMI40_nifti = "F:/Example_data/DATA/New_Data/Myel_001_monoe_40kev.nii.gz"
+    #path_to_output_folder = "F:/Example_data/DATA/New_Data/Output_folder"
+    #path_to_nnunet_results = "F:/Spinal-Multiple-Myeloma-SEG_nnUNet_models"
+    #split_data = True
 
+    #main(path_to_convCT_nifti, path_to_VMI40_nifti, path_to_output_folder, path_to_nnunet_results, split_data)
+
+    args = parse_arguments()
     main(
-        path_to_convCT_nifti,
-        path_to_VMI40_nifti,
-        path_to_output_folder,
-        path_to_nnunet_results,
-        split_data
+        args.path_to_convCT_nifti,
+        args.path_to_VMI40_nifti,
+        args.path_to_output_folder,
+        args.path_to_nnunet_results,
+        split_data=args.split_data
     )
