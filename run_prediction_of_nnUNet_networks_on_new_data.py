@@ -1,12 +1,46 @@
 # -*- coding: utf-8 -*-
 """
-NIfTI-based pipeline for Multi-Energy CT processing
-==================================================
+Spinal Multiple Myeloma Segmentation Pipeline
+=============================================
 
-This script:
+This script runs a nnU-Net-based segmentation pipeline for multi-energy CT
+data with NIfTI input:
+
     1) Loads ConvCT and VMI40 volumes from NIfTI (RAS)
-    2) Prepares working directory
-    3) Runs further processing (nnU-Net, etc.)
+    2) Prepares a clean working directory
+    3) Runs nnU-Net inference and produces final segmentation outputs
+
+The pipeline always starts from a fresh working directory to ensure
+reproducible results for each patient.
+
+Hardware & OS Testing
+--------------------
+The pipeline has been tested on both Linux and Windows systems with high-end GPUs:
+
+Linux:
+    - GPU: Nvidia Titan Xp, 12 GB GDDR5
+    - Motherboard: GIGABYTE Z690 GAMING X DDR5
+    - CPU: Intel Core i9 12900KF (8+8 cores/threads, 2.4/3.2 GHz)
+    - RAM: 64 GB DDR5
+    - Storage: SSD 1 TB (SYSTEM), HDD 4 TB RAID5 (DATA)
+    - OS: Ubuntu 24.04
+
+Windows:
+    - GPU: EVGA GeForce RTX 3090, 24 GB GDDR6
+    - CPU: Intel Core i9-10900KF (10/20 cores/threads, 3.7 GHz)
+    - RAM: 64 GB
+    - Storage: SSD M.2 2TB (SYSTEM)
+    - OS: Windows 10
+
+Notes on Multiprocessing
+------------------------
+- By default, the pipeline is configured for Linux and may use multiprocessing
+  for faster nnU-Net inference.
+- On Windows, due to potential issues with Python multiprocessing, the default
+  nnU-Net inference (variant 1) may fail when run from a clean session.
+- In such cases, open `utils.py` and in the function `run_nnunet_inference`, 
+  switch to variant 2 (`predict_from_files_sequential`), which disables multiprocessing.
+  This ensures safe execution on Windows, although it may run slower.
 
 Author: nohel
 """
@@ -42,47 +76,13 @@ setup_nnunet_env()
 # ----------------------------------------------------------
 from utils import *
 
-import SimpleITK as sitk
-
-# ==========================================================
-# Helper function
-# ==========================================================
-
-def get_patient_name(path):
-    """
-    Returns patient name from NIfTI file.
-    Uses metadata if available, otherwise extracts from filename.
-    """
-    if os.path.isfile(path) and (path.endswith(".nii") or path.endswith(".nii.gz")):
-        # Fallback: extract patient name from filename
-        filename = os.path.basename(path)
-
-        # Remove extension
-        if filename.endswith(".nii.gz"):
-            filename = filename[:-7]
-        elif filename.endswith(".nii"):
-            filename = filename[:-4]
-
-        parts = filename.split("_")
-
-        # If filename contains at least two parts (e.g. Myel_001_*)
-        if len(parts) >= 2:
-            patient_name = parts[0] + "_" + parts[1]
-        else:
-            # Fallback: use full filename (e.g. pat01)
-            patient_name = filename
-
-        return patient_name
-
-    else:
-        raise ValueError(f"Unsupported input path: {path}")
 
 # ==========================================================
 # Argument parser
 # ==========================================================
 def parse_arguments():
     parser = argparse.ArgumentParser(
-        description="Spinal Multiple Myeloma nnU-Net segmentation pipeline (NIfTI input)"
+        description="Spinal Multiple Myeloma nnU-Net segmentation pipeline for NIfTI input"
     )
 
     parser.add_argument(
@@ -209,7 +209,7 @@ def main(path_to_convCT_nifti, path_to_VMI40_nifti, path_to_output_folder, path_
         output_folder = working_folder_Spine_segmentation_final
 
     print("Spine segmentation - Prediction with nnU-Net")
-    '''
+    
     run_nnunet_inference(
         path_to_nnunet_results,
         dataset_name="Dataset802_Spine_segmentation_trained_on_VerSe20_and_MM_dataset_together",
@@ -218,7 +218,7 @@ def main(path_to_convCT_nifti, path_to_VMI40_nifti, path_to_output_folder, path_
         input_folder=input_folder,
         output_folder=output_folder
     )
-    '''
+    
     print("Spine segmentation - Prediction finished")
     
     # ======================================================
@@ -287,20 +287,12 @@ def main(path_to_convCT_nifti, path_to_VMI40_nifti, path_to_output_folder, path_
 # ==========================================================
 
 if __name__ == "__main__":
-
     #path_to_convCT_nifti = "F:/Example_data/DATA/New_Data/Myel_001_conv.nii.gz"
     #path_to_VMI40_nifti = "F:/Example_data/DATA/New_Data/Myel_001_monoe_40kev.nii.gz"
     #path_to_output_folder = "F:/Example_data/DATA/New_Data/Output_folder"
     #path_to_nnunet_results = "F:/Spinal-Multiple-Myeloma-SEG_nnUNet_models"
     #split_data = True
-
     #main(path_to_convCT_nifti, path_to_VMI40_nifti, path_to_output_folder, path_to_nnunet_results, split_data)
 
     args = parse_arguments()
-    main(
-        args.path_to_convCT_nifti,
-        args.path_to_VMI40_nifti,
-        args.path_to_output_folder,
-        args.path_to_nnunet_results,
-        split_data=args.split_data
-    )
+    main(args.path_to_convCT_nifti, args.path_to_VMI40_nifti, args.path_to_output_folder, args.path_to_nnunet_results, split_data=args.split_data)
