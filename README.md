@@ -298,18 +298,18 @@ This is the simplest and recommended setup for regular use.
 
 ```bash
 spinal-db-viewer \
-  --path_to_DICOM_folders "/path/to/MM_DICOM_Dataset" \
+  --path_to_DICOM_folders "/path/to/Spinal-Multiple-Myeloma-SEG" \
   --path_to_segmentations "/path/to/MM_NIfTI_Segmentation" \
-  --ID_patient "S840"
+  --ID_patient "Myel_001"
 ```
 
 ### Option 3 – Run as Python Script
 
 ```bash
 python Database_viewer_final.py \
-  --path_to_DICOM_folders "/path/to/MM_DICOM_Dataset" \
+  --path_to_DICOM_folders "/path/to/Spinal-Multiple-Myeloma-SEG" \
   --path_to_segmentations "/path/to/MM_NIfTI_Segmentation" \
-  --ID_patient "S840"
+  --ID_patient "Myel_001"
 ```
 
 All three options are equivalent.  
@@ -324,15 +324,27 @@ If arguments are not provided, the values defined in `config.py` are used as def
   Path to the NIfTI segmentation masks, organized by patient ID and mask type (`spine` or `lesions`).
 
 - `--ID_patient`  
-  Patient identifier (e.g., `S840`).
+  Patient identifier (e.g., `Myel_001`).
 
 ---------------------------------------------------------------------
 Full Segmentation Pipeline (Python)
 ---------------------------------------------------------------------
+---------------------------------------------------------------------
+Segmentation Pipelines
+---------------------------------------------------------------------
 
-Segmentation Script
--------------------
-**`run_prediction_of_nnUNet_networks_on_TCIA_data_final.py`**
+This repository provides two segmentation modes based on the input data format.
+Both pipelines use the same trained nnU-Net models but differ in preprocessing.
+
+- **TCIA Mode (DICOM input)** – full pipeline from raw DICOM data  
+- **New Prediction Mode (NIfTI input)** – direct inference on prepared NIfTI files  
+
+---------------------------------------------------------------------
+1. TCIA Mode (DICOM → Full Pipeline)
+---------------------------------------------------------------------
+
+**Script:** `run_prediction_of_nnUNet_networks_on_TCIA_data_final.py`  
+**CLI command:** `spinal-run-nnunet-TCIA`
 
 This script runs the complete nnU-Net–based segmentation pipeline for a single patient,
 starting directly from DICOM data and producing final lesion segmentations in the
@@ -350,17 +362,18 @@ Pipeline Steps
 4. Lesion segmentation from VMI 40 keV images
 5. Final reconstruction of lesion segmentation in the original image space
 
-Running the Segmentation Pipeline
---------------------------------
+### Running
+
 The segmentation pipeline can be executed from the command line.  
 You can either configure paths in the `config.py` file or provide them directly as arguments.
+You can run the pipeline in three equivalent ways:
 
-### Option 1 – Use `config.py` (recommended)
+#### Option 1 – Use `config.py` (recommended)
 
 If all paths and settings are correctly defined in `config.py`, the pipeline can be launched without any arguments:
 
 ```bash
-spinal-run-nnunet
+spinal-run-nnunet-TCIA
 ```
 
 Before running, make sure to set the following variables in `config.py`:
@@ -372,27 +385,26 @@ Before running, make sure to set the following variables in `config.py`:
 
 This is the simplest and recommended setup for regular use.
 
-### Option 2 – Installed CLI Tool (manual paths)
+#### Option 2 – Installed CLI Tool
 
 ```bash
-spinal-run-nnunet \
+spinal-run-nnunet-TCIA \
   --path_to_DICOM_folders "/path/to/MM_DICOM_Dataset" \
   --path_to_nnunet_results "/path/to/nnUNet_trained_models" \
-  --ID_patient "S840" \
+  --ID_patient "Myel_001" \
   --split True
 ```
 
-### Option 3 – Run as Python Script
+#### Option 3 – Run as Python Script
 
 ```bash
 python run_prediction_of_nnUNet_networks_on_TCIA_data_final.py \
   --path_to_DICOM_folders "/path/to/MM_DICOM_Dataset" \
   --path_to_nnunet_results "/path/to/nnUNet_trained_models" \
-  --ID_patient "S840" \
+  --ID_patient "Myel_001" \
   --split True
 ```
-
-All three options are equivalent.  
+All three options are equivalent. 
 If arguments are not provided, the values defined in `config.py` are used as defaults.
 
 #### Arguments
@@ -409,6 +421,66 @@ If arguments are not provided, the values defined in `config.py` are used as def
 - `--split`  
   If `True`, the data are split along the Z-axis to reduce memory requirements.
 
+---------------------------------------------------------------------
+2. New Prediction Mode (NIfTI input)
+---------------------------------------------------------------------
+
+**CLI command:** `spinal-run-nnunet-new-prediction`
+
+This mode is intended for already preprocessed data:
+- Input must be NIfTI (.nii.gz)
+- Data must be in RAS orientation
+- No DICOM conversion is performed
+
+### Running
+
+#### Option 1 – Use `config.py` (recommended)
+
+```bash
+spinal-run-nnunet-new-prediction
+```
+
+Make sure relevant paths are defined in `config.py`.
+
+#### Option 2 – Installed CLI Tool
+
+```bash
+spinal-run-nnunet-new-prediction \
+  --path_to_convCT_nifti "/path/to/convCT.nii.gz" \
+  --path_to_VMI40_nifti "/path/to/VMI40.nii.gz" \
+  --path_to_output_folder "/path/to/output" \
+  --path_to_nnunet_results "/path/to/nnUNet_trained_models" \
+  --split True
+```
+#### Option 3 – Run as Python Script
+
+```bash
+python run_prediction_on_new_data.py \
+  --path_to_convCT_nifti "/path/to/convCT.nii.gz" \
+  --path_to_VMI40_nifti "/path/to/VMI40.nii.gz" \
+  --path_to_output_folder "/path/to/output" \
+  --path_to_nnunet_results "/path/to/nnUNet_trained_models" \
+  --split True
+```
+---
+
+### Arguments 
+- `--path_to_convCT_nifti`  
+  Path to conventional CT in NIfTI format (new prediction mode)
+
+- `--path_to_VMI40_nifti`  
+  Path to VMI 40 keV NIfTI image
+
+- `--path_to_output_folder`  
+  Output directory for predictions
+
+- `--path_to_nnunet_results`  
+  Path to trained nnU-Net models
+
+- `--split`  
+  If `True`, splits data along the Z-axis to reduce memory usage
+
+---
 
 Notes on Multiprocessing
 ------------------------
@@ -426,66 +498,6 @@ To run a single model on all input images:
 ```bash
 nnUNetv2_predict_from_modelfolder -i INPUT_FOLDER -o OUTPUT_FOLDER -m MODEL_FOLDER -f all
 ```
-
-
-
-## Segmentation Pipelines: TCIA vs. New Data
-
-This repository provides two complementary segmentation pipeline modes, each with its own CLI command. Both modes use the same core nnU-Net models, but differ in the expected input data and preprocessing steps.
-
-### 1. TCIA Mode (DICOM → NIfTI, full pipeline)
-
-- **CLI command:** `spinal-run-nnunet-TCIA`
-- **Input:** DICOM data (folders organized by patient and series)
-- **Description:** This pipeline automatically converts DICOM data to NIfTI, performs spine and lesion segmentation, and saves results in the original image space. It is designed for direct use with the TCIA dataset or similarly structured DICOM data.
-- **Usage:**
-  ```bash
-  spinal-run-nnunet-TCIA \
-    --path_to_DICOM_folders "/path/to/MM_DICOM_Dataset" \
-    --path_to_nnunet_results "/path/to/nnUNet_trained_models" \
-    --ID_patient "S840" \
-    --split True
-  ```
-  Or without arguments if paths are set in `config.py`:
-  ```bash
-  spinal-run-nnunet-TCIA
-  ```
-  if all paths are set in `config.py`.
-
-#### Arguments for TCIA mode:
-- `--path_to_DICOM_folders` – path to DICOM folders organized by patient and series
-- `--path_to_nnunet_results` – folder with trained nnU-Net models
-- `--ID_patient` – patient identifier (e.g., S840)
-- `--split` – whether to split data along Z-axis (RAM saving)
-
-### 2. New Prediction Mode (NIfTI input)
-
-- **CLI command:** `spinal-run-nnunet-new-prediction`
-- **Input:** NIfTI files in RAS orientation for conventional CT and VMI 40 keV
-- **Description:** This pipeline expects already prepared NIfTI files (e.g., from another scanner or preprocessing) and performs segmentation directly on these data. Use this mode for new, external, or preprocessed datasets where DICOM is not available or not needed.
-- **Usage:**
-  ```bash
-  spinal-run-nnunet-new-prediction \
-    --path_to_convCT_nifti "/path/to/convCT.nii.gz" \
-    --path_to_VMI40_nifti "/path/to/VMI40.nii.gz" \
-    --path_to_output_folder "/path/to/output" \
-    --path_to_nnunet_results "/path/to/nnUNet_trained_models" \
-    --split True
-  ```
-  Or without arguments if paths are set in `config.py`:
-  ```bash
-  spinal-run-nnunet-new-prediction
-  ```
-  if all paths are set in `config.py`.
-
-#### Arguments for new prediction mode:
-- `--path_to_convCT_nifti` – path to conventional CT in NIfTI (RAS)
-- `--path_to_VMI40_nifti` – path to VMI 40 keV in NIfTI (RAS)
-- `--path_to_output_folder` – output folder
-- `--path_to_nnunet_results` – folder with trained nnU-Net models
-- `--split` – whether to split data along Z-axis (RAM saving)
-
----
 
 ## Citation
 
