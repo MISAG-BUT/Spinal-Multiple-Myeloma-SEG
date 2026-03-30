@@ -166,7 +166,7 @@ def main(path_to_convCT_nifti, path_to_VMI40_nifti, path_to_output_folder, path_
         output_folder = working_folder_Spine_segmentation_final
 
     print("Spine segmentation - Prediction with nnU-Net")
-
+    '''
     run_nnunet_inference(
         path_to_nnunet_results,
         dataset_name="Dataset802_Spine_segmentation_trained_on_VerSe20_and_MM_dataset_together",
@@ -175,7 +175,7 @@ def main(path_to_convCT_nifti, path_to_VMI40_nifti, path_to_output_folder, path_
         input_folder=input_folder,
         output_folder=output_folder
     )
-
+    '''
     print("Spine segmentation - Prediction finished")
     
     # ======================================================
@@ -186,6 +186,9 @@ def main(path_to_convCT_nifti, path_to_VMI40_nifti, path_to_output_folder, path_
     if split_data:
         print("Spine segmentation - Merging split predictions")
         merge_data(output_folder, working_folder_Spine_segmentation_final, patient_name)
+        
+    f = next(x for x in os.listdir(working_folder_Spine_segmentation_final) if x.endswith(".nii.gz"))
+    os.rename(os.path.join(working_folder_Spine_segmentation_final, f), os.path.join(working_folder_Spine_segmentation_final, f[:-16] + "_spine_segmentation.nii.gz"))
 
     print("Spine segmentation - Done")
 
