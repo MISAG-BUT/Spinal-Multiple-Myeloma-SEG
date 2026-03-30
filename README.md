@@ -389,7 +389,7 @@ This is the simplest and recommended setup for regular use.
 
 ```bash
 spinal-run-nnunet-TCIA \
-  --path_to_DICOM_folders "/path/to/MM_DICOM_Dataset" \
+  --path_to_DICOM_folders "/path/to/Spinal-Multiple-Myeloma-SEG" \
   --path_to_nnunet_results "/path/to/nnUNet_trained_models" \
   --ID_patient "Myel_001" \
   --split True
@@ -399,7 +399,7 @@ spinal-run-nnunet-TCIA \
 
 ```bash
 python run_prediction_of_nnUNet_networks_on_TCIA_data_final.py \
-  --path_to_DICOM_folders "/path/to/MM_DICOM_Dataset" \
+  --path_to_DICOM_folders "/path/to/Spinal-Multiple-Myeloma-SEG" \
   --path_to_nnunet_results "/path/to/nnUNet_trained_models" \
   --ID_patient "Myel_001" \
   --split True
