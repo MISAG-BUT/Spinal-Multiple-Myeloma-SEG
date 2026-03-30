@@ -7,9 +7,10 @@ This script runs a complete nnU-Net-based segmentation pipeline for a single pat
 starting from DICOM input:
 
     1) Conversion of ConvCT and VMI40 DICOM data to NIfTI
-    2) Prepares a clean working directory
-    3) Runs spine and lesion segmentation with nnU-Net
-    4) Reconstructs outputs in the original image space
+    2) Spine segmentation from ConvCT
+    3) Reorientation of spine segmentation to original image space
+    4) Lesion segmentation from VMI40
+    5) Final reconstruction of lesion segmentation in original space
 
 The pipeline is designed to always start from a clean working directory
 to ensure reproducibility and avoid mixing results from previous runs.
