@@ -339,9 +339,9 @@ Both pipelines use the same trained nnU-Net models but differ in preprocessing.
 - **TCIA Mode (DICOM input)** – full pipeline from raw DICOM data  
 - **New Prediction Mode (NIfTI input)** – direct inference on prepared NIfTI files  
 
----------------------------------------------------------------------
-1. TCIA Mode (DICOM → Full Pipeline)
----------------------------------------------------------------------
+
+## 1. TCIA Mode (DICOM → Full Pipeline)
+
 
 **Script:** `run_prediction_of_nnUNet_networks_on_TCIA_data_final.py`  
 **CLI command:** `spinal-run-nnunet-TCIA`
@@ -421,9 +421,9 @@ If arguments are not provided, the values defined in `config.py` are used as def
 - `--split`  
   If `True`, the data are split along the Z-axis to reduce memory requirements.
 
----------------------------------------------------------------------
-2. New Prediction Mode (NIfTI input)
----------------------------------------------------------------------
+
+## 2. New Prediction Mode (NIfTI input)
+
 
 **CLI command:** `spinal-run-nnunet-new-prediction`
 
