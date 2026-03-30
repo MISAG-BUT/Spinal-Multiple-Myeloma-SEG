@@ -106,13 +106,18 @@ def main(path_to_convCT_nifti, path_to_VMI40_nifti, path_to_output_folder, path_
 
     working_folder_conv_CT = join(working_folder, "Conv_CT")
     working_folder_conv_CT_cropped = join(working_folder, "Conv_CT_cropped")
+
     working_folder_VMI40 = join(working_folder, "VMI40")
     working_folder_VMI40_cropped = join(working_folder, "VMI40_cropped")
+
     working_folder_Segmentation = join(working_folder, "Segmentation")
     working_folder_Spine_segmentation_cropped = join(working_folder_Segmentation, "Spine_segmentation_cropped")
     working_folder_Spine_segmentation_final = join(working_folder_Segmentation, "Spine_segmentation_final")
+
+    working_folder_crop_parameters_folder = join(working_folder_Segmentation, "crop_parameters_folder")
     working_folder_Lesion_segmentation_cropped = join(working_folder_Segmentation, "Lesion_segmentation_cropped")
     working_folder_Lesion_segmentation_final = join(working_folder_Segmentation, "Lesion_segmentation_final")
+
 
     maybe_mkdir_p(working_folder) 
     maybe_mkdir_p(working_folder_conv_CT) 
@@ -122,6 +127,7 @@ def main(path_to_convCT_nifti, path_to_VMI40_nifti, path_to_output_folder, path_
     maybe_mkdir_p(working_folder_Segmentation)
     maybe_mkdir_p(working_folder_Spine_segmentation_cropped) 
     maybe_mkdir_p(working_folder_Spine_segmentation_final) 
+    maybe_mkdir_p(working_folder_crop_parameters_folder) 
     maybe_mkdir_p(working_folder_Lesion_segmentation_cropped) 
     maybe_mkdir_p(working_folder_Lesion_segmentation_final) 
 
@@ -182,6 +188,53 @@ def main(path_to_convCT_nifti, path_to_VMI40_nifti, path_to_output_folder, path_
         merge_data(output_folder, working_folder_Spine_segmentation_final, patient_name)
 
     print("Spine segmentation - Done")
+
+
+    # ======================================================
+    # 5. Lesion segmentation (VMI40)
+    # ======================================================
+    print("Lesion segmentation - Start")
+    print("Lesion segmentation - Preparation of data")
+
+    prepare_data_for_lesion_segmentation(
+        working_folder_Spine_segmentation_final,
+        working_folder_crop_parameters_folder,
+        working_folder_VMI40,
+        working_folder_VMI40_cropped,
+        patient_name
+    )
+
+    print("Lesion segmentation - Prediction with nnU-Net")
+
+    run_nnunet_inference(
+        path_to_nnunet_results,
+        dataset_name="Dataset710_MM_Lesion_seg_just_VMI_40",
+        trainer_name="nnUNetTrainer__nnUNetPlans__3d_fullres",
+        use_folds=("all",),
+        input_folder=working_folder_VMI40_cropped,
+        output_folder=working_folder_Lesion_segmentation_cropped
+    )
+
+    print("Lesion segmentation - Prediction finished")
+
+    # ======================================================
+    # 6. Final lesion segmentation reconstruction
+    # ======================================================
+    print("Lesion segmentation - Reorientation to original space")
+
+    reorient_lesion_segmentation_to_original_space(
+        working_folder_crop_parameters_folder,
+        working_folder_VMI40,
+        working_folder_Lesion_segmentation_cropped,
+        working_folder_Lesion_segmentation_final,
+        patient_name
+    )
+
+    print("Lesion segmentation - Done")
+    print(f"Final spine segmentation saved at: {working_folder_Spine_segmentation_final}")
+    print(f"Final lesion segmentation saved at: {working_folder_Lesion_segmentation_final}")
+
+
 
 # ==========================================================
 # Entry point
