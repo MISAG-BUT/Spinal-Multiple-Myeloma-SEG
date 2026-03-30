@@ -33,7 +33,7 @@ Together, these scripts allow researchers to reproduce the dataset preparation a
 ## Trained Models / Zenodo
 Pre-trained nnU-Net models for this project are available on Zenodo. These models were trained for segmentation of spine, vertebrae, and osteolytic spinal multiple myeloma lesions in dual-energy CT data.
 
-- The models were created as part of the dataset preparation and annotation pipeline for **Spinal-Multiple-Myeloma-SEG**, released via [The Cancer Imaging Archive (TCIA)](https://doi.org/10.7937/k4qv-hh78).
+- The models were created as part of the dataset preparation and annotation pipeline for **Spinal-Multiple-Myeloma-SEG**, released via The Cancer Imaging Archive (TCIA) [https://doi.org/10.7937/k4qv-hh78](https://doi.org/10.7937/k4qv-hh78).
 - Spine and vertebrae segmentation models were trained on **conventional CT data** from the VerSe2020 dataset, as well as on a combined VerSe2020 + multiple myeloma dataset. These masks were used to localize the spinal region and define spatial cropping for downstream lesion segmentation.
 - Lesion segmentation models were trained exclusively on **VMI 40 keV images** using an iterative semi-automatic annotation workflow.
 - All models operate on **NIfTI (.nii.gz)** inputs and are intended for **research and development purposes only**.
