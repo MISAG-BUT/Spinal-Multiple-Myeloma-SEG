@@ -295,4 +295,4 @@ if __name__ == "__main__":
     #main(path_to_convCT_nifti, path_to_VMI40_nifti, path_to_output_folder, path_to_nnunet_results, split_data)
 
     args = parse_arguments()
-    main(args.path_to_convCT_nifti, args.path_to_VMI40_nifti, args.path_to_output_folder, args.path_to_nnunet_results, split_data=args.split_data)
+    main(args.path_to_convCT_nifti, args.path_to_VMI40_nifti, args.path_to_output_folder, args.path_to_nnunet_results, split_data=args.split)

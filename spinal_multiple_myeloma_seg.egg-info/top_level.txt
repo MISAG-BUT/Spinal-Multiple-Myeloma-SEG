@@ -1,5 +1,6 @@
 Database_viewer_final
 config
 run_prediction_of_nnUNet_networks_on_TCIA_data_final
+run_prediction_of_nnUNet_networks_on_new_data
 spinal_mm_cli
 utils
