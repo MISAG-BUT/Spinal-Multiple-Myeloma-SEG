@@ -278,7 +278,7 @@ Running the Visualization Script from the Command Line
 The visualization tool can be executed from the command line.  
 You can either configure paths in the `config.py` file or provide them directly as arguments.
 
-### Option 1 – Use `config.py` (recommended)
+#### Option 1 – Use `config.py` (recommended)
 
 If all paths and the patient ID are correctly set in `config.py`, the viewer can be launched without any arguments:
 
@@ -294,7 +294,7 @@ Before running, make sure to edit the following variables in `config.py`:
 
 This is the simplest and recommended setup for regular use.
 
-### Option 2 – Installed CLI Tool (manual paths)
+#### Option 2 – Installed CLI Tool (manual paths)
 
 ```bash
 spinal-db-viewer \
@@ -303,7 +303,7 @@ spinal-db-viewer \
   --ID_patient "Myel_001"
 ```
 
-### Option 3 – Run as Python Script
+#### Option 3 – Run as Python Script
 
 ```bash
 python Database_viewer_final.py \
@@ -464,7 +464,7 @@ python run_prediction_on_new_data.py \
 ```
 ---
 
-### Arguments 
+#### Arguments 
 - `--path_to_convCT_nifti`  
   Path to conventional CT in NIfTI format (new prediction mode)
 
@@ -503,12 +503,6 @@ nnUNetv2_predict_from_modelfolder -i INPUT_FOLDER -o OUTPUT_FOLDER -m MODEL_FOLD
 
 If you use this code in your research, please cite our paper:
 TO DO
-
-
-
-
-
-
 
 
 
