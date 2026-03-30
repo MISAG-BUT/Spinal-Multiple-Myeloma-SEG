@@ -3,17 +3,15 @@
 Spinal Multiple Myeloma Segmentation Pipeline
 =============================================
 
-This script runs a complete nnU-Net-based segmentation pipeline for a single patient
-starting from DICOM input:
+This script runs a nnU-Net-based segmentation pipeline for multi-energy CT
+data with NIfTI input:
 
-    1) Conversion of ConvCT and VMI40 DICOM data to NIfTI
-    2) Spine segmentation from ConvCT
-    3) Reorientation of spine segmentation to original image space
-    4) Lesion segmentation from VMI40
-    5) Final reconstruction of lesion segmentation in original space
+    1) Loads ConvCT and VMI40 volumes from NIfTI (RAS)
+    2) Prepares a clean working directory
+    3) Runs nnU-Net inference and produces final segmentation outputs
 
-The pipeline is designed to always start from a clean working directory
-to ensure reproducibility and avoid mixing results from previous runs.
+The pipeline always starts from a fresh working directory to ensure
+reproducible results for each patient.
 
 Hardware & OS Testing
 --------------------
@@ -45,7 +43,6 @@ Notes on Multiprocessing
   This ensures safe execution on Windows, although it may run slower.
 
 Author: nohel
-Created: Aug 13, 2025
 """
 
 # ==========================================================
@@ -56,55 +53,65 @@ import shutil
 import argparse
 from os.path import join
 import sys, os
+
 # Import config for all paths and environment setup
 import config
 from config import NNUNET_REPO_PATH, NNUNET_RAW, NNUNET_PREPROCESSED, NNUNET_RESULTS_ENV
+
 # Set up nnU-Net environment and sys.path
 def setup_nnunet_env():
-    """Set up sys.path and nnU-Net environment variables from config."""    
+    """Set up sys.path and nnU-Net environment variables from config."""
     if NNUNET_REPO_PATH not in sys.path:
         sys.path.append(NNUNET_REPO_PATH)
+
     os.environ["nnUNet_raw"] = NNUNET_RAW
     os.environ["nnUNet_preprocessed"] = NNUNET_PREPROCESSED
     os.environ["nnUNet_results"] = NNUNET_RESULTS_ENV
 
+
 setup_nnunet_env()
 
+# ----------------------------------------------------------
+# Project-specific imports
+# ----------------------------------------------------------
 from utils import *
+
 
 # ==========================================================
 # Argument parser
 # ==========================================================
 def parse_arguments():
     parser = argparse.ArgumentParser(
-        description="Spinal Multiple Myeloma nnU-Net segmentation pipeline for DICOM input"
-    )
-
-
-    parser.add_argument(
-        "--path_to_DICOM_folders",
-        type=str,
-        default=config.PATH_TO_DICOM_FOLDERS,
-        help=(
-            "Path to the DICOM folders, which are organized by patient ID\n"
-            "and then by series description. (e.g. F:/Example_data/DATA/MM_DICOM_Dataset)"
-        )
+        description="Spinal Multiple Myeloma nnU-Net segmentation pipeline for NIfTI input"
     )
 
     parser.add_argument(
-        "--ID_patient",
+        "--path_to_convCT_nifti",
+        dest="path_to_convCT_nifti",
         type=str,
-        default=config.ID_PATIENT,
-        help="Patient ID folder name (e.g., S840)"
+        default=config.PATH_TO_CONVCT_NIFTI,
+        help="Path to ConvCT NIfTI file (.nii or .nii.gz)"
     )
-
+    parser.add_argument(
+        "--path_to_VMI40_nifti",
+        dest="path_to_VMI40_nifti",
+        type=str,
+        default=config.PATH_TO_VMI40_NIFTI,
+        help="Path to VMI40 NIfTI file (.nii or .nii.gz)"
+    )
+    parser.add_argument(
+        "--path_to_output_folder",
+        dest="path_to_output_folder",
+        type=str,
+        default=config.PATH_TO_OUTPUT_FOLDER,
+        help="Path to output folder"
+    )
     parser.add_argument(
         "--path_to_nnunet_results",
         type=str,
         default=config.PATH_TO_NNUNET_RESULTS,
         help="Path to the trained nnU-Net model folder"
     )
-
     parser.add_argument(
         "--split",
         type=lambda x: (str(x).lower() == 'true'),
@@ -114,40 +121,22 @@ def parse_arguments():
 
     return parser.parse_args()
 
-
 # ==========================================================
 # Main pipeline
 # ==========================================================
-def main(path_to_DICOM_folders, ID_patient, path_to_nnunet_results, split_data=True):
-    """
-    Run the complete segmentation pipeline for a single patient.
 
-    Parameters
-    ----------
-    path_to_DICOM_folders : str
-        Path to the root directory containing patient DICOM data.
-    ID_patient : str
-        Name of the patient folder (e.g. 'S840').
-    path_to_nnunet_results : str
-        Path to trained nnU-Net models.
-    split_data : bool, optional
-        If True, images are split along the Z-axis to reduce memory usage.
-        If False, the full volume is processed at once (requires very high RAM).
-    """
+def main(path_to_convCT_nifti, path_to_VMI40_nifti, path_to_output_folder, path_to_nnunet_results, split_data=True):
 
     # ======================================================
     # 1. Input paths and patient-specific setup
     # ======================================================
-    patient_main_file = join(path_to_DICOM_folders, ID_patient)
-    path_to_output_folder = path_to_DICOM_folders + "_output"
-
-    # Identify ConvCT and VMI40 DICOM folders
-    patient_name, path_to_convCT_folder, path_to_VMI40_folder = find_convCT_and_VMI40_at_DICOM_folder(patient_main_file)
+    patient_name = get_patient_name(path_to_convCT_nifti)
+    print(f"Patient: {patient_name}")
 
     # ======================================================
-    # 2. Working directory preparation
+    # 2. Working directory preparation and nifti renaming
     # ======================================================
-    print("Creation of working folders and conversion to NIfTI - Start")
+    print("Creation of working folders - Start")
 
     working_folder = join(path_to_output_folder, f"{patient_name}_output")
 
@@ -158,44 +147,51 @@ def main(path_to_DICOM_folders, ID_patient, path_to_nnunet_results, split_data=T
         print(f"Working folder already exists, removing: {working_folder}")
         shutil.rmtree(working_folder)
 
-    # Define all working subfolders
     working_folder_conv_CT = join(working_folder, "Conv_CT")
-    working_folder_conv_CT_in_RAS = join(working_folder, "Conv_CT_in_RAS")
-    working_folder_conv_CT_in_RAS_cropped = join(working_folder, "Conv_CT_in_RAS_cropped")
+    working_folder_conv_CT_cropped = join(working_folder, "Conv_CT_cropped")
 
     working_folder_VMI40 = join(working_folder, "VMI40")
     working_folder_VMI40_cropped = join(working_folder, "VMI40_cropped")
 
     working_folder_Segmentation = join(working_folder, "Segmentation")
+    working_folder_Spine_segmentation_cropped = join(working_folder_Segmentation, "Spine_segmentation_cropped")
     working_folder_Spine_segmentation_final = join(working_folder_Segmentation, "Spine_segmentation_final")
-    working_folder_Spine_segmentation_in_RAS = join(working_folder_Segmentation, "Spine_segmentation_in_RAS")
-    working_folder_Spine_segmentation_in_RAS_cropped = join(working_folder_Segmentation, "Spine_segmentation_in_RAS_cropped")
 
     working_folder_crop_parameters_folder = join(working_folder_Segmentation, "crop_parameters_folder")
     working_folder_Lesion_segmentation_cropped = join(working_folder_Segmentation, "Lesion_segmentation_cropped")
     working_folder_Lesion_segmentation_final = join(working_folder_Segmentation, "Lesion_segmentation_final")
 
-    # Create folders and convert DICOM → NIfTI
-    create_working_folders_and_convert_to_nifti(
-        patient_name,
-        working_folder,
+
+    maybe_mkdir_p(working_folder) 
+    maybe_mkdir_p(working_folder_conv_CT) 
+    maybe_mkdir_p(working_folder_conv_CT_cropped) 
+    maybe_mkdir_p(working_folder_VMI40) 
+    maybe_mkdir_p(working_folder_VMI40_cropped) 
+    maybe_mkdir_p(working_folder_Segmentation)
+    maybe_mkdir_p(working_folder_Spine_segmentation_cropped) 
+    maybe_mkdir_p(working_folder_Spine_segmentation_final) 
+    maybe_mkdir_p(working_folder_crop_parameters_folder) 
+    maybe_mkdir_p(working_folder_Lesion_segmentation_cropped) 
+    maybe_mkdir_p(working_folder_Lesion_segmentation_final) 
+
+
+    convCT_dst = join(
         working_folder_conv_CT,
-        working_folder_conv_CT_in_RAS,
-        working_folder_conv_CT_in_RAS_cropped,
-        working_folder_VMI40,
-        working_folder_VMI40_cropped,
-        working_folder_Segmentation,
-        working_folder_Spine_segmentation_final,
-        working_folder_Spine_segmentation_in_RAS,
-        working_folder_Spine_segmentation_in_RAS_cropped,
-        working_folder_crop_parameters_folder,
-        working_folder_Lesion_segmentation_cropped,
-        working_folder_Lesion_segmentation_final,
-        path_to_convCT_folder,
-        path_to_VMI40_folder
+        patient_name + "_conv_RAS_0000.nii.gz"
     )
 
-    print("Creation of working folders and conversion to NIfTI - Done")
+    shutil.copy(path_to_convCT_nifti, convCT_dst)
+    print(f"Copied ConvCT: {convCT_dst}")
+
+    vmi40_dst = join(
+        working_folder_VMI40,
+        patient_name + "_monoe_40kev_0000.nii.gz"
+    )
+
+    shutil.copy(path_to_VMI40_nifti, vmi40_dst)
+    print(f"Copied VMI40: {vmi40_dst}")
+
+    print("Creation of working folders  - Done")
 
     # ======================================================
     # 3. Spine segmentation (ConvCT)
@@ -205,15 +201,15 @@ def main(path_to_DICOM_folders, ID_patient, path_to_nnunet_results, split_data=T
 
     if split_data:
         # Split ConvCT along Z-axis to reduce memory usage
-        split_convCT_data(working_folder_conv_CT_in_RAS, working_folder_conv_CT_in_RAS_cropped, patient_name)
-        input_folder = working_folder_conv_CT_in_RAS_cropped
-        output_folder = working_folder_Spine_segmentation_in_RAS_cropped
+        split_convCT_data(working_folder_conv_CT, working_folder_conv_CT_cropped, patient_name)
+        input_folder = working_folder_conv_CT_cropped
+        output_folder = working_folder_Spine_segmentation_cropped
     else:
-        input_folder = working_folder_conv_CT_in_RAS
-        output_folder = working_folder_Spine_segmentation_in_RAS
+        input_folder = working_folder_conv_CT
+        output_folder = working_folder_Spine_segmentation_final
 
     print("Spine segmentation - Prediction with nnU-Net")
-
+    
     run_nnunet_inference(
         path_to_nnunet_results,
         dataset_name="Dataset802_Spine_segmentation_trained_on_VerSe20_and_MM_dataset_together",
@@ -222,9 +218,9 @@ def main(path_to_DICOM_folders, ID_patient, path_to_nnunet_results, split_data=T
         input_folder=input_folder,
         output_folder=output_folder
     )
-
+    
     print("Spine segmentation - Prediction finished")
-
+    
     # ======================================================
     # 4. Spine segmentation postprocessing
     # ======================================================
@@ -232,15 +228,13 @@ def main(path_to_DICOM_folders, ID_patient, path_to_nnunet_results, split_data=T
 
     if split_data:
         print("Spine segmentation - Merging split predictions")
-        merge_data(output_folder, working_folder_Spine_segmentation_in_RAS, patient_name)
-
-    reorient_spine_segmentation_to_original_space(
-        working_folder_Spine_segmentation_final,
-        working_folder_Spine_segmentation_in_RAS,
-        working_folder_conv_CT_in_RAS
-    )
+        merge_data(output_folder, working_folder_Spine_segmentation_final, patient_name)
+        
+    f = next(x for x in os.listdir(working_folder_Spine_segmentation_final) if x.endswith(".nii.gz"))
+    os.rename(os.path.join(working_folder_Spine_segmentation_final, f), os.path.join(working_folder_Spine_segmentation_final, f[:-16] + "_spine_segmentation.nii.gz"))
 
     print("Spine segmentation - Done")
+
 
     # ======================================================
     # 5. Lesion segmentation (VMI40)
@@ -287,16 +281,18 @@ def main(path_to_DICOM_folders, ID_patient, path_to_nnunet_results, split_data=T
     print(f"Final lesion segmentation saved at: {working_folder_Lesion_segmentation_final}")
 
 
+
 # ==========================================================
 # Entry point
 # ==========================================================
+
 if __name__ == "__main__":
-    #base = 'F:/Example_data/DATA/'  # path to the dataset folder
-    #path_to_DICOM_folders = join(base, 'Spinal-Multiple-Myeloma-SEG')  #path to the DICOM folders, which are organized by patient ID and then by series description
-    #path_to_nnunet_results = "F:/Spinal-Multiple-Myeloma-SEG_nnUNet_models"  #path to the folder containing trained nnU-Net models (should have subfolders for each model)
-    #ID_patient = "Myel_001"  
-    #split_data = True # If True, data are split along Z-axis to reduce memory requirements. If False, the full volume is processed at once (requires ~256 GB RAM).
-    #main(path_to_DICOM_folders, ID_patient, path_to_nnunet_results, split_data)
+    #path_to_convCT_nifti = "F:/Example_data/DATA/New_Data/Myel_001_conv.nii.gz"
+    #path_to_VMI40_nifti = "F:/Example_data/DATA/New_Data/Myel_001_monoe_40kev.nii.gz"
+    #path_to_output_folder = "F:/Example_data/DATA/New_Data/Output_folder"
+    #path_to_nnunet_results = "F:/Spinal-Multiple-Myeloma-SEG_nnUNet_models"
+    #split_data = True
+    #main(path_to_convCT_nifti, path_to_VMI40_nifti, path_to_output_folder, path_to_nnunet_results, split_data)
 
     args = parse_arguments()
-    main(args.path_to_DICOM_folders, args.ID_patient, args.path_to_nnunet_results, split_data=args.split)
+    main(args.path_to_convCT_nifti, args.path_to_VMI40_nifti, args.path_to_output_folder, args.path_to_nnunet_results, split_data=args.split)

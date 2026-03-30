@@ -33,12 +33,14 @@ dependencies = [
 
 [project.scripts]
 spinal-db-viewer = "spinal_mm_cli:database_viewer"
-spinal-run-nnunet = "spinal_mm_cli:run_prediction"
+spinal-run-nnunet-TCIA = "spinal_mm_cli:run_prediction_tcia"
+spinal-run-nnunet-new-prediction = "spinal_mm_cli:run_prediction_new"
 
 [tool.setuptools]
 py-modules = [
     "Database_viewer_final",
     "run_prediction_of_nnUNet_networks_on_TCIA_data_final",
+    "run_prediction_of_nnUNet_networks_on_new_data",
     "utils",
     "spinal_mm_cli",
     "config",

@@ -48,7 +48,35 @@ def subfiles(folder: str, join: bool = True, prefix: str = None, suffix: str = N
     return res  
 
 
+def get_patient_name(path):
+    """
+    Returns patient name from NIfTI file.
+    Uses metadata if available, otherwise extracts from filename.
+    """
+    if os.path.isfile(path) and (path.endswith(".nii") or path.endswith(".nii.gz")):
+        # Fallback: extract patient name from filename
+        filename = os.path.basename(path)
 
+        # Remove extension
+        if filename.endswith(".nii.gz"):
+            filename = filename[:-7]
+        elif filename.endswith(".nii"):
+            filename = filename[:-4]
+
+        parts = filename.split("_")
+
+        # If filename contains at least two parts (e.g. Myel_001_*)
+        if len(parts) >= 2:
+            patient_name = parts[0] + "_" + parts[1]
+        else:
+            # Fallback: use full filename (e.g. pat01)
+            patient_name = filename
+
+        return patient_name
+
+    else:
+        raise ValueError(f"Unsupported input path: {path}")
+    
 # =============================================================================
 # DICOM Utilities
 # =============================================================================
