@@ -40,7 +40,7 @@ Pre-trained nnU-Net models for this project are available on Zenodo. These model
 
 **Links:**
 - Zenodo repository with trained models can be downloaded from Zenodo repositoy: [Spinal-Multiple-Myeloma-SEG_nnUNet_models](https://zenodo.org/uploads/18598645)
-- Zenodo snapshot of GitHub repo: [https://zenodo.org/records/18596640](https://zenodo.org/records/18596640)
+- Zenodo snapshot of GitHub repo: [https://zenodo.org/records/19369118](https://zenodo.org/records/19369118)
 - Zenodo DOI: [https://doi.org/10.5281/zenodo.15878952](https://doi.org/10.5281/zenodo.15878952)
 
 A more detailed description of the models, training data, and processing pipeline is provided in the accompanying Zenodo README file.
