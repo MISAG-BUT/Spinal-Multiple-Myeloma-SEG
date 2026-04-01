@@ -7,7 +7,7 @@ Welcome to the repository for the paper **"Spinal-Multiple-Myeloma-SEG"**! This 
 
 ### Read the [paper](TO BE Updated): 
 
-**Authors:** Michal Nohel<sup>1,†</sup>, Vlastimil Valek<sup>2,3,†</sup>, Tomas Rohan<sup>2,3</sup>, Martin Stork<sup>4</sup>, Roman Jakubicek<sup>1</sup>, Jiri Chmelik<sup>1,††,</sup>* , Marek Dostal<sup>2,5,††,</sup>*
+**Authors:** Michal Nohel<sup>1,†</sup>, Vlastimil Valek<sup>2,3,†</sup>, Tomas Rohan<sup>2,3</sup>, Martin Stork<sup>4</sup>, Roman Jakubicek<sup>1</sup>, Jiri Chmelik<sup>1,††,\*</sup> , Marek Dostal<sup>2,5,††,\*</sup>
 
 **Author Affiliations:**  
 <sup>1</sup> Department of Biomedical Engineering, Faculty of Electrical Engineering and Communication, Brno University of Technology, Brno, Czech Republic  
