@@ -207,20 +207,6 @@ def find_convCT_and_VMI40_at_DICOM_folder(patient_main_file, series_tag=None):
         elif series_description == 'MonoE 40keV[HU]':
             path_to_VMI40_folder = DICOM_folder_path
 
-    for DICOM_folder_path, series_description, entry_patient_name, entry_patient_id in selected_group:
-        if series_description is None:
-            continue
-
-        if isinstance(series_description, bytes):
-            series_description = series_description.decode('utf-8', errors='ignore')
-
-        if series_description.endswith("_konv"):
-            path_to_convCT_folder = DICOM_folder_path
-            patient_name = series_description[:-5]
-
-        elif series_description == 'MonoE 40keV[HU]':
-            path_to_VMI40_folder = DICOM_folder_path
-
     if path_to_convCT_folder is None:
         raise RuntimeError(
             f"Could not find a ConvCT series ending with '_konv' in patient folder '{patient_main_file}'"

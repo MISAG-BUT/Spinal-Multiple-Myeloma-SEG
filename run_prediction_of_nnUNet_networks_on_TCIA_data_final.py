@@ -309,10 +309,11 @@ def main(path_to_DICOM_folders, ID_patient, path_to_nnunet_results, split_data=T
 if __name__ == "__main__":
     #base = 'F:/Example_data/DATA/'  # path to the dataset folder
     #path_to_DICOM_folders = join(base, 'Spinal-Multiple-Myeloma-SEG')  #path to the DICOM folders, which are organized by patient ID and then by series description
-    #path_to_nnunet_results = "F:/Spinal-Multiple-Myeloma-SEG_nnUNet_models"  #path to the folder containing trained nnU-Net models (should have subfolders for each model)
+    #path_to_nnunet_results = "F:/Example_data/DATA/Spinal-Multiple-Myeloma-SEG_nnUNet_models"  #path to the folder containing trained nnU-Net models (should have subfolders for each model)
     #ID_patient = "Myel_001"  
     #split_data = True # If True, data are split along Z-axis to reduce memory requirements. If False, the full volume is processed at once (requires ~256 GB RAM).
-    #main(path_to_DICOM_folders, ID_patient, path_to_nnunet_results, split_data)
+    #series_tag= ""
+    #main(path_to_DICOM_folders, ID_patient, path_to_nnunet_results, split_data, series_tag)
 
     args = parse_arguments()
     main(
