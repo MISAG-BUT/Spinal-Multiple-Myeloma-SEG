@@ -25,7 +25,6 @@ NNUNET_RESULTS_ENV = "nnUNet_project/nnUNet_results"
 # Example: F:/Example_data/DATA/MM_DICOM_Dataset
 PATH_TO_DICOM_FOLDERS = r"F:/TCIA/manifest-1774389300184/Spinal-Multiple-Myeloma-SEG"
 
-
 # Path to the segmentation masks (NIfTI), organized by patient ID and then by mask type (spine or lesions)
 # Example: F:/Example_data/DATA/MM_NIfTI_Segmentation
 PATH_TO_SEGMENTATIONS = r"F:/TCIA/manifest-1774389300184/MM_NIfTI_Segmentation"
@@ -33,7 +32,13 @@ PATH_TO_SEGMENTATIONS = r"F:/TCIA/manifest-1774389300184/MM_NIfTI_Segmentation"
 
 # Default patient ID (used as folder name)
 # Example: Myel_001
-ID_PATIENT = "Myel_001" 
+ID_PATIENT = "Myel_001"
+
+# Optional patient series variant tag when multiple acquisitions exist in the same patient folder.
+# Leave this value blank by default.
+# Set it only for patients with multiple acquisition variants, e.g. "a" or "b" for Myel_012_a / Myel_012_b.
+# Example for Myel_012 with 2 series: PATIENT_SERIES_TAG = "a" for Myel_012_a, and PATIENT_SERIES_TAG = "b" for Myel_012_b.
+PATIENT_SERIES_TAG = ""
 
 # Path to the folder containing trained nnU-Net models (should have subfolders for each model)
 # Example: F:/Spinal-Multiple-Myeloma-SEG_nnUNet_models
@@ -53,7 +58,6 @@ SPLIT_CONVCT_DEFAULT = True
 # Path to ConvCT NIfTI file (for new data pipeline, RAS orientation)
 # Example: F:/Example_data/DATA/New_Data/Myel_001_conv.nii.gz
 PATH_TO_CONVCT_NIFTI = r"F:/Example_data/DATA/New_Data/Myel_001_conv.nii.gz"
-
 
 # Path to VMI40 NIfTI file (for new data pipeline, RAS orientation)
 # Example: F:/Example_data/DATA/New_Data/Myel_001_monoe_40kev.nii.gz

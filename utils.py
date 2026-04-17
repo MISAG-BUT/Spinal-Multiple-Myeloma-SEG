@@ -93,35 +93,128 @@ def find_dicom_series(root_path):
     return dicom_series_folders
 
 
-def find_convCT_and_VMI40_at_DICOM_folder(patient_main_file):
+def select_dicom_series_group(patient_main_file, series_tag=None):
+    """
+    Select a group of DICOM series folders for a patient based on DICOM PatientName or PatientID.
+
+    If `series_tag` is provided, it selects the group whose PatientName ends with
+    the tag (for example Myel_012_a or Myel_012_b). If no tag is provided and only one
+    patient group exists, that group is returned.
+    """
+    all_DICOM_folders = find_dicom_series(patient_main_file)
+    if not all_DICOM_folders:
+        raise RuntimeError(
+            f"No DICOM series folders found under '{patient_main_file}'. "
+            "Check that the path exists and contains DICOM files."
+        )
+
+    groups = {}
+    for folder in all_DICOM_folders:
+        dicom_files = [join(folder, f) for f in os.listdir(folder) if f != "DIRFILE"]
+        if not dicom_files:
+            continue
+
+        ds = pydicom.dcmread(dicom_files[0], stop_before_pixels=True)
+        patient_name = str(ds.get("PatientName", "")).strip()
+        patient_id = str(ds.get("PatientID", "")).strip()
+        key = patient_name if patient_name else patient_id
+        if not key:
+            key = "<unknown>"
+        groups.setdefault(key, []).append(folder)
+
+    if not groups:
+        raise RuntimeError(
+            f"Found DICOM folders under '{patient_main_file}', but none could be grouped by PatientName or PatientID. "
+            "Check that the DICOM files are valid and contain those tags."
+        )
+
+    if series_tag is not None:
+        series_tag = str(series_tag).strip()
+        if series_tag == "":
+            series_tag = None
+
+    if series_tag:
+        desired_suffix = f"_{series_tag}"
+        for key in sorted(groups):
+            if key.lower().endswith(desired_suffix.lower()):
+                return groups[key]
+
+        raise ValueError(
+            f"No DICOM series group found for patient folder '{patient_main_file}' "
+            f"with series_tag '{series_tag}'. Available groups: {sorted(groups)}"
+        )
+
+    if len(groups) == 1:
+        return next(iter(groups.values()))
+
+    tags = sorted(
+        {key.split("_")[-1] for key in groups if key and "_" in key}
+    )
+    raise ValueError(
+        f"Multiple patient series groups were found under '{patient_main_file}' and no series_tag was provided. "
+        f"Please set PATIENT_SERIES_TAG or pass --series_tag with one of: {tags}. "
+        f"Available patient names/IDs: {sorted(groups)}"
+    )
+
+
+def find_convCT_and_VMI40_at_DICOM_folder(patient_main_file, series_tag=None):
     """
     Search for conventional CT (_konv) and MonoE 40keV series in a patient's folder.
     Returns patient name, path to convCT, and path to VMI40 series.
+
+    If `series_tag` is provided, only series with a matching DICOM PatientName
+    suffix (e.g. _a or _b) will be considered.
     """
 
+    if series_tag is not None:
+        series_tag = str(series_tag).strip()
+        if series_tag == "":
+            series_tag = None
+
     print(f"DICOM root: {patient_main_file}")
-    DICOM_folders_all = find_dicom_series(patient_main_file)
-    print("\nFound DICOM series:")
-    for folder in DICOM_folders_all:
+    selected_folders = select_dicom_series_group(patient_main_file, series_tag)
+
+    print("\nUsing the following DICOM folders for selection:")
+    for folder in selected_folders:
         print(f"  - {folder}")
 
     print('Searching for convCT and VMI40 data...')
+    if series_tag:
+        print(f"Using series tag: {series_tag}")
 
-    for DICOM_folder in DICOM_folders_all:
-        DICOM_folder_path = join(patient_main_file, DICOM_folder)
-        # Load all DICOM files, skipping DIRFILE
+    path_to_convCT_folder = None
+    path_to_VMI40_folder = None
+    patient_name = None
+
+    for DICOM_folder_path in selected_folders:
         DICOM_files = [os.path.join(DICOM_folder_path, f) for f in os.listdir(DICOM_folder_path) if f != 'DIRFILE']
-        series_description = pydicom.dcmread(DICOM_files[0]).get('SeriesDescription')
+        if not DICOM_files:
+            continue
+
+        ds = pydicom.dcmread(DICOM_files[0], stop_before_pixels=True)
+        series_description = ds.get('SeriesDescription')
+
+        if series_description is None:
+            continue
+
+        if isinstance(series_description, bytes):
+            series_description = series_description.decode('utf-8', errors='ignore')
 
         if series_description.endswith("_konv"):
             path_to_convCT_folder = DICOM_folder_path
             patient_name = series_description[:-5]
 
-
         elif series_description == 'MonoE 40keV[HU]':
             path_to_VMI40_folder = DICOM_folder_path
-        else:
-            continue
+
+    if path_to_convCT_folder is None:
+        raise RuntimeError(
+            f"Could not find a ConvCT series ending with '_konv' in patient folder '{patient_main_file}'"
+        )
+    if path_to_VMI40_folder is None:
+        raise RuntimeError(
+            f"Could not find a MonoE 40keV[HU] series in patient folder '{patient_main_file}'"
+        )
 
     return patient_name, path_to_convCT_folder, path_to_VMI40_folder
 

@@ -43,7 +43,7 @@ setup_nnunet_env()
 # ----------------------------------------------------------
 # Project-specific imports
 # ----------------------------------------------------------
-from utils import find_dicom_series, load_DICOM_data_SITK
+from utils import find_dicom_series, select_dicom_series_group, load_DICOM_data_SITK
 import SimpleITK as sitk
 import pydicom
 import napari
@@ -83,17 +83,30 @@ def parse_arguments():
         help="Patient ID used as the folder name (e.g. S840)"
     )
 
+    parser.add_argument(
+        "--series_tag",
+        type=str,
+        default=config.PATIENT_SERIES_TAG,
+        help=(
+            "Optional patient series variant tag when multiple acquisitions exist in the same patient folder. "
+            "Use 'a' or 'b' for patient names like Myel_012_a / Myel_012_b. "
+            "If the patient has multiple acquisition variants, this must be specified."
+        )
+    )
+
     return parser.parse_args()
 
 # ==========================================================
 # Main
 # ==========================================================
 
-def main(path_to_DICOM_folders,path_to_segmentations,ID_patient):
+def main(path_to_DICOM_folders,path_to_segmentations,ID_patient, series_tag=None):
 
     print(f"Running visualization for patient {ID_patient}")
     print(f"DICOM path: {path_to_DICOM_folders}")
     print(f"Segmentation path: {path_to_segmentations}")
+    if series_tag and series_tag.strip():
+        print(f"Using patient series tag: {series_tag.strip()}")
 
     # ------------------------------------------------------
     # Locate patient folder
@@ -104,12 +117,12 @@ def main(path_to_DICOM_folders,path_to_segmentations,ID_patient):
     print(f"DICOM root: {patient_main_file}")
 
     # ------------------------------------------------------
-    # Identify all DICOM series folders
+    # Identify and select the correct DICOM series group
     # ------------------------------------------------------
-    DICOM_folders_all = find_dicom_series(patient_main_file)
+    selected_DICOM_folders = select_dicom_series_group(patient_main_file, series_tag)
 
-    print("\nFound DICOM series:")
-    for folder in DICOM_folders_all:
+    print("\nUsing the following DICOM folders for visualization:")
+    for folder in selected_DICOM_folders:
         print(f"  - {folder}")
 
     # ======================================================
@@ -117,7 +130,7 @@ def main(path_to_DICOM_folders,path_to_segmentations,ID_patient):
     # ======================================================
     print("\nLoading DICOM volumes...")
 
-    for DICOM_folder_path in DICOM_folders_all:
+    for DICOM_folder_path in selected_DICOM_folders:
 
         # Load all DICOM files except DIRFILE and Segmentation series (if present in DICOM)
         DICOM_files = [
@@ -230,12 +243,18 @@ def main(path_to_DICOM_folders,path_to_segmentations,ID_patient):
 if __name__ == "__main__":
     #base = 'F:/Example_data/DATA/'  # path to the dataset folder
     #path_to_DICOM_folders = join(base, 'Spinal-Multiple-Myeloma-SEG')  #path to the DICOM folders, which are organized by patient ID and then by series description
-    #path_to_segmentations = join(base, 'MM_NIfTI Segmentation')  #path to the segmentation masks, which are organized by patient ID and then by mask type (spine or lesions)
+    #path_to_segmentations = join(base, 'MM_NIfTI_Segmentation')  #path to the segmentation masks, which are organized by patient ID and then by mask type (spine or lesions)
     #ID_patient = "Myel_001"
-    #main(path_to_DICOM_folders, path_to_segmentations, ID_patient)
+    #series_tag= ""
+    #main(path_to_DICOM_folders, path_to_segmentations, ID_patient, series_tag)  
 
     args = parse_arguments()
-    main(args.path_to_DICOM_folders, args.path_to_segmentations, args.ID_patient)
+    main(
+        args.path_to_DICOM_folders,
+        args.path_to_segmentations,
+        args.ID_patient,
+        series_tag=args.series_tag
+    )
 
     
 

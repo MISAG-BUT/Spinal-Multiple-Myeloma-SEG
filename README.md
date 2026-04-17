@@ -291,6 +291,7 @@ Before running, make sure to edit the following variables in `config.py`:
 - `PATH_TO_DICOM_FOLDERS`
 - `PATH_TO_SEGMENTATIONS`
 - `ID_PATIENT`
+- `PATIENT_SERIES_TAG` (leave blank by default; set only for multi-series patients like `Myel_012_a` / `Myel_012_b`)
 - `NNUNET_REPO_PATH` (required for nnU-Net integration)
 
 This is the simplest and recommended setup for regular use.
@@ -301,7 +302,8 @@ This is the simplest and recommended setup for regular use.
 spinal-db-viewer \
   --path_to_DICOM_folders "/path/to/Spinal-Multiple-Myeloma-SEG" \
   --path_to_segmentations "/path/to/MM_NIfTI_Segmentation" \
-  --ID_patient "Myel_001"
+  --ID_patient "Myel_001" \
+  --series_tag ""
 ```
 
 #### Option 3 – Run as Python Script
@@ -310,10 +312,11 @@ spinal-db-viewer \
 python Database_viewer_final.py \
   --path_to_DICOM_folders "/path/to/Spinal-Multiple-Myeloma-SEG" \
   --path_to_segmentations "/path/to/MM_NIfTI_Segmentation" \
-  --ID_patient "Myel_001"
+  --ID_patient "Myel_001" \
+  --series_tag ""
 ```
 
-All three options are equivalent.  
+All three options are equivalent.
 If arguments are not provided, the values defined in `config.py` are used as defaults.
 
 #### Arguments
@@ -326,6 +329,9 @@ If arguments are not provided, the values defined in `config.py` are used as def
 
 - `--ID_patient`  
   Patient identifier (e.g., `Myel_001`).
+
+- `--series_tag`  
+  Optional series variant tag for multi-acquisition patients. Use `a` or `b` for names like `Myel_012_a` / `Myel_012_b`. Leave blank for standard single-series patients.
 
 ---------------------------------------------------------------------
 Full Segmentation Pipeline (Python)
@@ -381,6 +387,7 @@ Before running, make sure to set the following variables in `config.py`:
 - `PATH_TO_DICOM_FOLDERS`
 - `PATH_TO_NNUNET_RESULTS`
 - `ID_PATIENT`
+- `PATIENT_SERIES_TAG` (leave blank by default; set only for multi-series patients, e.g. `a` or `b` for `Myel_012_a` / `Myel_012_b`)
 - `NNUNET_REPO_PATH` (required for nnU-Net integration)
 - `SPLIT_CONVCT_DEFAULT` (default split behavior)
 
@@ -393,7 +400,8 @@ spinal-run-nnunet-TCIA \
   --path_to_DICOM_folders "/path/to/Spinal-Multiple-Myeloma-SEG" \
   --path_to_nnunet_results "/path/to/nnUNet_trained_models" \
   --ID_patient "Myel_001" \
-  --split True
+  --split True \
+  --series_tag ""
 ```
 
 #### Option 3 – Run as Python Script
@@ -403,7 +411,8 @@ python run_prediction_of_nnUNet_networks_on_TCIA_data_final.py \
   --path_to_DICOM_folders "/path/to/Spinal-Multiple-Myeloma-SEG" \
   --path_to_nnunet_results "/path/to/nnUNet_trained_models" \
   --ID_patient "Myel_001" \
-  --split True
+  --split True \
+  --series_tag ""
 ```
 All three options are equivalent. 
 If arguments are not provided, the values defined in `config.py` are used as defaults.
@@ -418,6 +427,9 @@ If arguments are not provided, the values defined in `config.py` are used as def
 
 - `--ID_patient`  
   Patient identifier (e.g., `S840`).
+
+- `--series_tag`  
+  Optional series variant tag for patients with multiple acquisition series. Use `a` or `b` for names like `Myel_012_a` / `Myel_012_b`. Leave blank for normal cases.
 
 - `--split`  
   If `True`, the data are split along the Z-axis to reduce memory requirements.
