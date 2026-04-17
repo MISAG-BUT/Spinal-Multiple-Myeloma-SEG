@@ -241,20 +241,20 @@ def main(path_to_DICOM_folders,path_to_segmentations,ID_patient, series_tag=None
 # Entry point
 # ==========================================================
 if __name__ == "__main__":
-    base = '/home/nohel/DATA/Example_data/DATA/'  # path to the dataset folder
-    path_to_DICOM_folders = join(base, 'Spinal-Multiple-Myeloma-SEG')  #path to the DICOM folders, which are organized by patient ID and then by series description
-    path_to_segmentations = join(base, 'MM_NIfTI_Segmentation')  #path to the segmentation masks, which are organized by patient ID and then by mask type (spine or lesions)
-    ID_patient = "Myel_001"
-    series_tag= ""
-    main(path_to_DICOM_folders, path_to_segmentations, ID_patient, series_tag)  
+    #base = 'F:/Example_data/DATA/'  # path to the dataset folder
+    #path_to_DICOM_folders = join(base, 'Spinal-Multiple-Myeloma-SEG')  #path to the DICOM folders, which are organized by patient ID and then by series description
+    #path_to_segmentations = join(base, 'MM_NIfTI_Segmentation')  #path to the segmentation masks, which are organized by patient ID and then by mask type (spine or lesions)
+    #ID_patient = "Myel_001"
+    #series_tag= ""
+    #main(path_to_DICOM_folders, path_to_segmentations, ID_patient, series_tag)  
 
-    #args = parse_arguments()
-    #main(
-    #    args.path_to_DICOM_folders,
-    #    args.path_to_segmentations,
-    #    args.ID_patient,
-    #    series_tag=args.series_tag
-    #)
+    args = parse_arguments()
+    main(
+        args.path_to_DICOM_folders,
+        args.path_to_segmentations,
+        args.ID_patient,
+        series_tag=args.series_tag
+    )
 
     
 
