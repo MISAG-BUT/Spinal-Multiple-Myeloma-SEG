@@ -400,7 +400,8 @@ spinal-run-nnunet-TCIA \
   --path_to_DICOM_folders "/path/to/Spinal-Multiple-Myeloma-SEG" \
   --path_to_nnunet_results "/path/to/nnUNet_trained_models" \
   --ID_patient "Myel_001" \
-  --split True
+  --split True \
+  --series_tag ""
 ```
 
 #### Option 3 – Run as Python Script
@@ -410,7 +411,8 @@ python run_prediction_of_nnUNet_networks_on_TCIA_data_final.py \
   --path_to_DICOM_folders "/path/to/Spinal-Multiple-Myeloma-SEG" \
   --path_to_nnunet_results "/path/to/nnUNet_trained_models" \
   --ID_patient "Myel_001" \
-  --split True
+  --split True \
+  --series_tag ""
 ```
 All three options are equivalent. 
 If arguments are not provided, the values defined in `config.py` are used as defaults.
