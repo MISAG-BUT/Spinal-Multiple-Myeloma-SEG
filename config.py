@@ -37,6 +37,7 @@ ID_PATIENT = "Myel_001"
 # Optional patient series variant tag when multiple acquisitions exist in the same patient folder.
 # Leave this value blank by default.
 # Set it only for patients with multiple acquisition variants, e.g. "a" or "b" for Myel_012_a / Myel_012_b.
+# Example for Myel_012 with 2 series: PATIENT_SERIES_TAG = "a" for Myel_012_a, and PATIENT_SERIES_TAG = "b" for Myel_012_b.
 PATIENT_SERIES_TAG = ""
 
 # Path to the folder containing trained nnU-Net models (should have subfolders for each model)
