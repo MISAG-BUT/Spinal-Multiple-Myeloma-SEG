@@ -6,7 +6,7 @@
 # ==========================================================
 # Path to your local nnU-Net repository (required for importing nnU-Net code)
 # Example: F:/Code/nnUNet
-NNUNET_REPO_PATH = r"F:/Code/nnUNet"
+NNUNET_REPO_PATH = r"/home/nohel/DATA/Code/nnUNet"
 
 # nnU-Net environment variables (not required to change, only for suppressing nnU-Net warnings)
 # You only need to set NNUNET_REPO_PATH to the location of your downloaded nnUNet repository.
@@ -23,21 +23,25 @@ NNUNET_RESULTS_ENV = "nnUNet_project/nnUNet_results"
 
 # Path to the DICOM folders, organized by patient ID and then by series description
 # Example: F:/Example_data/DATA/MM_DICOM_Dataset
-PATH_TO_DICOM_FOLDERS = r"F:/TCIA/manifest-1774389300184/Spinal-Multiple-Myeloma-SEG"
-
+PATH_TO_DICOM_FOLDERS = r"/home/nohel/DATA/Example_data/DATA/Spinal-Multiple-Myeloma-SEG"
 
 # Path to the segmentation masks (NIfTI), organized by patient ID and then by mask type (spine or lesions)
 # Example: F:/Example_data/DATA/MM_NIfTI_Segmentation
-PATH_TO_SEGMENTATIONS = r"F:/TCIA/manifest-1774389300184/MM_NIfTI_Segmentation"
+PATH_TO_SEGMENTATIONS = r"/home/nohel/DATA/Example_data/DATA/MM_NIfTI_Segmentation"
 
 
 # Default patient ID (used as folder name)
 # Example: Myel_001
-ID_PATIENT = "Myel_001" 
+ID_PATIENT = "Myel_001"
+
+# Optional patient series variant tag when multiple acquisitions exist in the same patient folder.
+# Leave this value blank by default.
+# Set it only for patients with multiple acquisition variants, e.g. "a" or "b" for Myel_012_a / Myel_012_b.
+PATIENT_SERIES_TAG = ""
 
 # Path to the folder containing trained nnU-Net models (should have subfolders for each model)
 # Example: F:/Spinal-Multiple-Myeloma-SEG_nnUNet_models
-PATH_TO_NNUNET_RESULTS = r"F:/Spinal-Multiple-Myeloma-SEG_nnUNet_models"
+PATH_TO_NNUNET_RESULTS = r"/home/nohel/DATA/Example_data/Spinal-Multiple-Myeloma-SEG_nnUNet_models"
 
 # Default for split option in prediction pipeline
 # If True, ConvCT volumes are split along Z-axis to reduce memory usage (recommended for most users)
@@ -52,14 +56,13 @@ SPLIT_CONVCT_DEFAULT = True
 
 # Path to ConvCT NIfTI file (for new data pipeline, RAS orientation)
 # Example: F:/Example_data/DATA/New_Data/Myel_001_conv.nii.gz
-PATH_TO_CONVCT_NIFTI = r"F:/Example_data/DATA/New_Data/Myel_001_conv.nii.gz"
-
+PATH_TO_CONVCT_NIFTI = r"/home/nohel/DATA/Example_data/DATA/New_Data/Myel_001_conv.nii.gz"
 
 # Path to VMI40 NIfTI file (for new data pipeline, RAS orientation)
 # Example: F:/Example_data/DATA/New_Data/Myel_001_monoe_40kev.nii.gz
-PATH_TO_VMI40_NIFTI = r"F:/Example_data/DATA/New_Data/Myel_001_monoe_40kev.nii.gz"
+PATH_TO_VMI40_NIFTI = r"/home/nohel/DATA/Example_data/DATA/New_Data/Myel_001_monoe_40kev.nii.gz"
 
 # Path to output folder (for new data pipeline)
 # Example: F:/Example_data/DATA/New_Data/Output_folder
-PATH_TO_OUTPUT_FOLDER = r"F:/Example_data/DATA/New_Data/Output_folder"
+PATH_TO_OUTPUT_FOLDER = r"/home/nohel/DATA/Example_data/DATA/New_Data/Output_folder"
 

@@ -99,6 +99,17 @@ def parse_arguments():
     )
 
     parser.add_argument(
+        "--series_tag",
+        type=str,
+        default=config.PATIENT_SERIES_TAG,
+        help=(
+            "Optional patient series variant tag when multiple acquisitions exist in the same patient folder. "
+            "Use 'a' or 'b' for patient names like Myel_012_a / Myel_012_b. "
+            "If multiple acquisition variants are present, this must be specified."
+        )
+    )
+
+    parser.add_argument(
         "--path_to_nnunet_results",
         type=str,
         default=config.PATH_TO_NNUNET_RESULTS,
@@ -118,7 +129,7 @@ def parse_arguments():
 # ==========================================================
 # Main pipeline
 # ==========================================================
-def main(path_to_DICOM_folders, ID_patient, path_to_nnunet_results, split_data=True):
+def main(path_to_DICOM_folders, ID_patient, path_to_nnunet_results, split_data=True, series_tag=None):
     """
     Run the complete segmentation pipeline for a single patient.
 
@@ -133,6 +144,8 @@ def main(path_to_DICOM_folders, ID_patient, path_to_nnunet_results, split_data=T
     split_data : bool, optional
         If True, images are split along the Z-axis to reduce memory usage.
         If False, the full volume is processed at once (requires very high RAM).
+    series_tag : str, optional
+        Optional patient series variant tag when multiple acquisitions exist in the same patient folder.
     """
 
     # ======================================================
@@ -142,7 +155,10 @@ def main(path_to_DICOM_folders, ID_patient, path_to_nnunet_results, split_data=T
     path_to_output_folder = path_to_DICOM_folders + "_output"
 
     # Identify ConvCT and VMI40 DICOM folders
-    patient_name, path_to_convCT_folder, path_to_VMI40_folder = find_convCT_and_VMI40_at_DICOM_folder(patient_main_file)
+    patient_name, path_to_convCT_folder, path_to_VMI40_folder = find_convCT_and_VMI40_at_DICOM_folder(
+        patient_main_file,
+        series_tag=series_tag
+    )
 
     # ======================================================
     # 2. Working directory preparation
@@ -299,4 +315,10 @@ if __name__ == "__main__":
     #main(path_to_DICOM_folders, ID_patient, path_to_nnunet_results, split_data)
 
     args = parse_arguments()
-    main(args.path_to_DICOM_folders, args.ID_patient, args.path_to_nnunet_results, split_data=args.split)
+    main(
+        args.path_to_DICOM_folders,
+        args.ID_patient,
+        args.path_to_nnunet_results,
+        split_data=args.split,
+        series_tag=args.series_tag
+    )
