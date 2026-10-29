@@ -3,9 +3,13 @@
 ![Graphical Abstract](graphical_abstract.png "Overview of the dataset creation pipeline and data structure.")
 
 ## Overview
-Welcome to the repository for the paper **"Spinal-Multiple-Myeloma-SEG"**! This repository provides the code for the implementation of the networks for segmentation within the popular [nnUNet framework](https://github.com/MIC-DKFZ/nnUNet).
+Welcome to the repository accompanying the published *Scientific Data* article **"Spinal-Multiple-Myeloma-SEG: Segmentation of spinal multiple myeloma lesions in dual-energy CT"**. This repository provides code for dataset visualization and segmentation workflows based on the [nnU-Net framework](https://github.com/MIC-DKFZ/nnUNet).
 
-### Read the [paper](TO BE Updated): 
+### Published article
+
+**Nohel et al. (2026).** *Spinal-Multiple-Myeloma-SEG: Segmentation of spinal multiple myeloma lesions in dual-energy CT.* **Scientific Data**. [Read the published article](https://doi.org/10.1038/s41597-026-08061-x).
+
+**Public dataset:** [Spinal-Multiple-Myeloma-SEG on TCIA](https://doi.org/10.7937/k4qv-hh78). 
 
 **Authors:** Michal Nohel<sup>1,†</sup>, Vlastimil Valek<sup>2,3,†</sup>, Tomas Rohan<sup>2,3</sup>, Martin Stork<sup>4</sup>, Roman Jakubicek<sup>1</sup>, Jiri Chmelik<sup>1,††,\*</sup> , Marek Dostal<sup>2,5,††,\*</sup>
 
@@ -39,7 +43,7 @@ Pre-trained nnU-Net models for this project are available on Zenodo. These model
 - All models operate on **NIfTI (.nii.gz)** inputs and are intended for **research and development purposes only**.
 
 **Links:**
-- Zenodo repository with trained models can be downloaded from Zenodo repositoy: [Spinal-Multiple-Myeloma-SEG_nnUNet_models](https://zenodo.org/uploads/18598645)
+- Original dataset-preparation models: [Spinal-Multiple-Myeloma-SEG_nnUNet_models](https://doi.org/10.5281/zenodo.18598645)
 - Zenodo snapshot of GitHub repo: [https://zenodo.org/records/19369118](https://zenodo.org/records/19369118)
 - Zenodo DOI: [https://doi.org/10.5281/zenodo.15878952](https://doi.org/10.5281/zenodo.15878952)
 
@@ -514,8 +518,27 @@ nnUNetv2_predict_from_modelfolder -i INPUT_FOLDER -o OUTPUT_FOLDER -m MODEL_FOLD
 
 ## Citation
 
-If you use this code in your research, please cite our paper:
-TO DO
+If you use this repository or the associated dataset, please cite the published *Scientific Data* article and the original TCIA dataset.
+
+**Scientific Data article:**
+
+Nohel, M., Valek, V., Rohan, T., Stork, M., Jakubicek, R., Chmelik, J., & Dostal, M. (2026). **Spinal-Multiple-Myeloma-SEG: Segmentation of spinal multiple myeloma lesions in dual-energy CT.** *Scientific Data*. https://doi.org/10.1038/s41597-026-08061-x
+
+```bibtex
+@article{nohel2026spinalmm,
+  author  = {Nohel, Michal and Valek, Vlastimil and Rohan, Tomas and Stork, Martin and Jakubicek, Roman and Chmelik, Jiri and Dostal, Marek},
+  title   = {{Spinal-Multiple-Myeloma-SEG}: Segmentation of spinal multiple myeloma lesions in dual-energy {CT}},
+  journal = {Scientific Data},
+  year    = {2026},
+  doi     = {10.1038/s41597-026-08061-x},
+  url     = {https://doi.org/10.1038/s41597-026-08061-x}
+}
+```
+
+**Original TCIA dataset:**
+
+Nohel, M., Válek V., Rohan T., Štork M., Jakubíček R., Chmelík J., Dostál M. (2026) **Segmentation of spinal multiple myeloma lesions in dual-energy CT (Spinal-Multiple-Myeloma-SEG) (Version 1) [Dataset]**. The Cancer Imaging Archive. https://doi.org/10.7937/k4qv-hh78
+
 ```bibtex
 @misc{Nohel_Valek_Rohan_Stork_Jakubicek_Chmelik_Dostál_2026,
 author={Nohel, Michal and Valek, Vlastimil and Rohan, Tomas and Stork, Martin and Jakubicek, Roman and Chmelik, Jiri and Dostál, Marek},
@@ -526,8 +549,7 @@ publisher={The Cancer Imaging Archive},
 year={2026},
 abstractNote={This dataset consists of dual-energy low-dose CT scans from 67 patients diagnosed with multiple myeloma, with a total of 72 scans. The dataset includes conventional CT images, virtual monoenergetic images (at 40, 80, and 120 keV), calcium-suppressed images (with suppression indices of 25, 50, 75, and 100), as well as segmentation masks of vertebrae (including vertebra type classification) and multiple myeloma lesions in the spine. In total, the dataset contains 576 image series comprising 564,464 axial slices.  In addition to image data, the dataset provides supporting non-image information, including basic demographic details of patients (mean age 66 years, range 48–85; 36% female) and their clinical data related to disease progression.  This dataset holds substantial promise for advancing and objectively evaluating Computer-Aided Detection and Diagnostic systems, particularly those based on machine learning and artificial intelligence. } }
 ```
-**Dataset reference:**
-Nohel, M., Válek V., Rohan T., Štork M., Jakubíček R., Chmelík J., Dostál M. (2026) **Segmentation of spinal multiple myeloma lesions in dual-energy CT (Spinal-Multiple-Myeloma-SEG) (Version 1) [Dataset]**. The Cancer Imaging Archive. https://doi.org/10.7937/k4qv-hh78
+
 
 
 
