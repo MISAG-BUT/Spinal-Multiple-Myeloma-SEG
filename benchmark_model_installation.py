@@ -37,6 +37,10 @@ class InstallationError(RuntimeError):
     """An actionable download, validation, or installation failure."""
 
 
+class _RetryableDownloadError(InstallationError):
+    """Transport interruption or invalid downloaded bytes; not a disk error."""
+
+
 class _HttpsRedirects(urllib.request.HTTPRedirectHandler):
     def redirect_request(self, request, response, code, message, headers, new_url):
         if urlparse(new_url).scheme != "https":
@@ -177,11 +181,12 @@ def _safe_member(info):
     return PurePosixPath(*parts)
 
 
-def _publish_directory(source, destination):
-    """Atomically rename a complete directory without replacing any destination.
+def _rename_no_clobber(source, destination):
+    """Atomically rename a complete file/directory without replacing a destination.
 
     os.rename is no-clobber on Windows only. Use native exclusive rename flags
     on Linux/macOS; fail closed if the OS/filesystem lacks that primitive.
+    Source and destination must share a filesystem; never fall back to copying.
     """
     if os.name == "nt":
         os.rename(str(source), str(destination))
@@ -205,6 +210,23 @@ def _publish_directory(source, destination):
         if code in (errno.EEXIST, errno.ENOTEMPTY):
             raise FileExistsError(code, "Installation destination already exists", str(destination))
         raise InstallationError("Atomic no-clobber installation failed: {}".format(os.strerror(code)))
+
+
+def _publish_directory(source, destination):
+    """Publish a complete installation using exclusive same-filesystem rename."""
+    _rename_no_clobber(source, destination)
+
+
+def _publish_archive(part, archive, spec):
+    """Publish verified bytes without hard links, under the caller's archive lock.
+
+    Revalidate a competing destination, never replace it. Unsupported native
+    operations and cross-device renames fail closed, without download retries.
+    """
+    try:
+        _rename_no_clobber(part, archive)
+    except FileExistsError:
+        verify_archive(archive, spec)
 
 
 def extract_model(archive, spec, destination):
@@ -324,29 +346,45 @@ class ModelInstaller:
         for attempt in range(self.retries):
             try:
                 # Restart from zero. No unchecked range/append semantics.
-                with self.opener(spec.download_url, timeout=self.timeout) as response:
+                try:
+                    response = self.opener(spec.download_url, timeout=self.timeout)
+                except PermissionError:
+                    raise
+                except (OSError, http.client.HTTPException) as error:
+                    raise _RetryableDownloadError("Network request failed: {}".format(error)) from error
+                with response:
                     if urlparse(response.geturl()).scheme != "https" or response.status != 200:
-                        raise InstallationError("Unexpected or insecure download response")
+                        raise _RetryableDownloadError("Unexpected or insecure download response")
                     with part.open("wb") as output:
                         done = 0
                         while True:
-                            block = response.read(CHUNK_SIZE)
+                            try:
+                                block = response.read(CHUNK_SIZE)
+                            except PermissionError:
+                                raise
+                            except (OSError, http.client.HTTPException) as error:
+                                raise _RetryableDownloadError("Network stream interrupted: {}".format(error)) from error
                             if not block:
                                 break
                             done += len(block)
                             if done > spec.zip_size:
-                                raise InstallationError("Download exceeds registered archive size")
+                                raise _RetryableDownloadError("Download exceeds registered archive size")
                             output.write(block)
                             self.progress(done, spec.zip_size)
                         output.flush()
                         os.fsync(output.fileno())
-                verify_archive(part, spec)
-                os.link(str(part), str(archive))
+                try:
+                    verify_archive(part, spec)
+                except InstallationError as error:
+                    raise _RetryableDownloadError(str(error)) from error
+                _publish_archive(part, archive, spec)
                 return archive
-            except (OSError, ValueError, http.client.HTTPException, InstallationError) as error:
+            except _RetryableDownloadError as error:
                 last_error = error
                 if attempt + 1 < self.retries:
                     time.sleep(min(self.backoff * (2 ** attempt), 30))
+            except (OSError, InstallationError) as error:
+                raise InstallationError("Archive filesystem/publication failure (not retried) for {}: {}".format(archive, error)) from error
             finally:
                 if part.exists():
                     part.unlink()

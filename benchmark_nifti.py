@@ -8,7 +8,10 @@ cannot establish physical alignment. Crop upper bounds are always exclusive.
 from dataclasses import dataclass
 from itertools import product
 from pathlib import Path
+import ctypes
+import errno
 import os
+import sys
 import tempfile
 from typing import Tuple
 
@@ -262,8 +265,8 @@ def save_prepared_channels(prepared, output_dir):
 def reconstruct_lesions(prediction, crop, reference, output_path=None):
     """Reconstruct strict 0/1 lesions; caller verifies the model's output convention.
 
-    Explicit saving uses a complete validated temporary NIfTI and an atomic
-    no-clobber hard link. Filesystems without hard links fail safely.
+    Explicit saving uses a complete validated temporary NIfTI and an exclusive
+    same-filesystem rename. No hard-link support is required.
     """
     expected = crop_image(reference, crop)
     compare_geometry(expected, prediction, "cropped lesion prediction")
@@ -277,8 +280,41 @@ def reconstruct_lesions(prediction, crop, reference, output_path=None):
     return result
 
 
+def _rename_no_clobber(source, destination):
+    """Publish on one filesystem, without importing model-installation code.
+
+    Keep this small OS primitive independent to preserve the validated Phase 5C
+    installer unchanged. Native flag tests guard its no-overwrite semantics.
+    """
+    if os.name == "nt":
+        os.rename(str(source), str(destination))
+        return
+    library = ctypes.CDLL(None, use_errno=True)
+    source_bytes, destination_bytes = os.fsencode(source), os.fsencode(destination)
+    if sys.platform.startswith("linux") and hasattr(library, "renameat2"):
+        operation = library.renameat2
+        operation.argtypes = [ctypes.c_int, ctypes.c_char_p, ctypes.c_int, ctypes.c_char_p, ctypes.c_uint]
+        operation.restype = ctypes.c_int
+        result = operation(-100, source_bytes, -100, destination_bytes, 1)
+    elif sys.platform == "darwin" and hasattr(library, "renamex_np"):
+        operation = library.renamex_np
+        operation.argtypes = [ctypes.c_char_p, ctypes.c_char_p, ctypes.c_uint]
+        operation.restype = ctypes.c_int
+        result = operation(source_bytes, destination_bytes, 4)
+    else:
+        raise OSError(errno.ENOTSUP, "Atomic no-clobber NIfTI rename is unavailable")
+    if result != 0:
+        code = ctypes.get_errno()
+        raise OSError(code, "Atomic no-clobber NIfTI rename failed: {}".format(os.strerror(code)), str(destination))
+
+
 def save_nifti_no_clobber(image, output_path):
-    """Validate a complete temporary NIfTI before atomic no-clobber publication."""
+    """Validate/fsync a temporary NIfTI, then exclusively rename it in-place.
+
+    The temporary and final paths share a directory. Native exclusive rename
+    must be supported; never fall back to overwriting or cross-device copying.
+    This protects publication visibility, not durability after power loss.
+    """
     validate_image(image)
     path = Path(output_path)
     if not str(path).endswith(".nii.gz"):
@@ -294,9 +330,9 @@ def save_nifti_no_clobber(image, output_path):
             raise ValueError("Saved NIfTI voxel verification failed")
         with temporary.open("rb+") as stream:
             os.fsync(stream.fileno())
-        os.link(str(temporary), str(path))
+        _rename_no_clobber(temporary, path)
     finally:
-        temporary.unlink()
+        temporary.unlink(missing_ok=True)
 
 
 def validate_plan_inputs(plan):

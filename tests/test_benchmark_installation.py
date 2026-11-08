@@ -18,7 +18,7 @@ from benchmark_model_registry import get_model
 from benchmark_model_installation import (
     InstallationError, ModelInstaller, RECEIPT, default_cache_dir,
     extract_model, validate_model, verify_archive, _HttpsRedirects,
-    _safe_member, _publish_directory,
+    _safe_member, _publish_directory, _publish_archive,
 )
 
 
@@ -274,6 +274,113 @@ class InstallationTests(unittest.TestCase):
         self.assertIn("timeout", calls[0])
         self.assertEqual(progress[-1], (len(data), len(data)))
         verify_archive(result, spec)
+
+    def test_archive_publication_without_hard_links(self):
+        from unittest.mock import Mock
+        spec, data = fixture()
+        installer = self.installer(data)
+        installer.opener = Mock(side_effect=lambda *a, **k: Response(data))
+        with patch("benchmark_model_installation.os.link", side_effect=OSError("unsupported hard links")) as link:
+            archive = installer._download(spec)
+        link.assert_not_called()
+        installer.opener.assert_called_once()
+        verify_archive(archive, spec)
+        self.assertFalse(list(archive.parent.glob("*.part")))
+
+    def test_archive_destination_collision_validates_without_overwrite(self):
+        from benchmark_model_installation import _rename_no_clobber
+        spec, data = fixture()
+        for existing in (data, b"invalid destination"):
+            with self.subTest(valid=existing == data):
+                part, archive = self.root / "new.part", self.root / "existing.zip"
+                part.write_bytes(data)
+                archive.write_bytes(existing)
+                if existing == data:
+                    _publish_archive(part, archive, spec)
+                else:
+                    with self.assertRaises(InstallationError):
+                        _publish_archive(part, archive, spec)
+                self.assertEqual(archive.read_bytes(), existing)
+                self.assertEqual(part.read_bytes(), data)
+        # A destination arriving after validation is still never replaced.
+        installer = self.installer(data)
+        def race(part, archive):
+            archive.write_bytes(data)
+            _rename_no_clobber(part, archive)
+        with patch("benchmark_model_installation._rename_no_clobber", side_effect=race):
+            archive = installer._download(spec)
+        self.assertEqual(archive.read_bytes(), data)
+        self.assertFalse(list(archive.parent.glob("*.part")))
+
+    def test_publication_errors_never_repeat_download_and_cleanup(self):
+        import errno
+        from unittest.mock import Mock
+        spec, data = fixture()
+        for error in (PermissionError("denied"), OSError(errno.EXDEV, "cross-device"),
+                      OSError(errno.EOPNOTSUPP, "unsupported rename"),
+                      InstallationError("native rename unavailable")):
+            with self.subTest(error=error):
+                installer = self.installer(data)
+                installer.opener = Mock(side_effect=lambda *a, **k: Response(data))
+                with patch("benchmark_model_installation._publish_archive", side_effect=error):
+                    with self.assertRaisesRegex(InstallationError, "filesystem/publication failure.*not retried"):
+                        installer._download(spec)
+                installer.opener.assert_called_once()
+                self.assertFalse(list(installer.root.rglob("*.part")))
+                self.assertFalse(list(installer.root.rglob("*.zip")))
+                self.assertFalse(list((installer.root / "locks").iterdir()))
+
+    def test_local_write_permission_failure_not_retried(self):
+        from unittest.mock import Mock
+        spec, data = fixture()
+        installer = self.installer(data)
+        installer.opener = Mock(side_effect=lambda *a, **k: Response(data))
+        original = Path.open
+        def deny_part(path, *args, **kwargs):
+            if path.name.endswith(".part") and args and args[0] == "wb":
+                raise PermissionError("part write denied")
+            return original(path, *args, **kwargs)
+        with patch.object(Path, "open", deny_part):
+            with self.assertRaisesRegex(InstallationError, "not retried"):
+                installer._download(spec)
+        installer.opener.assert_called_once()
+        self.assertFalse(list(installer.root.rglob("*.part")))
+
+    def test_corrupt_download_never_reaches_publication(self):
+        spec, data = fixture()
+        for bad in (data[:-1], b"X" * len(data)):
+            with self.subTest(size=len(bad)):
+                installer = self.installer(bad, retries=2)
+                with patch("benchmark_model_installation._publish_archive") as publish:
+                    with self.assertRaises(InstallationError):
+                        installer._download(spec)
+                publish.assert_not_called()
+                self.assertFalse(list(installer.root.rglob("*.zip")))
+                self.assertFalse(list(installer.root.rglob("*.part")))
+
+    def test_archive_two_installers_share_publication_without_hard_links(self):
+        spec, data = fixture()
+        installer = self.installer(data)
+        calls, results, failures = [], [], []
+        installer.opener = lambda *a, **k: (calls.append(1) or Response(data))
+        other = ModelInstaller(installer.root, opener=installer.opener, progress=lambda *a: None)
+        def work(owner):
+            try:
+                results.append(owner._download(spec))
+            except Exception as error:
+                failures.append(error)
+        with patch("benchmark_model_installation.os.link", side_effect=OSError("unsupported")):
+            threads = [threading.Thread(target=work, args=(owner,)) for owner in (installer, other)]
+            for thread in threads:
+                thread.start()
+            for thread in threads:
+                thread.join(timeout=10)
+        self.assertFalse(any(thread.is_alive() for thread in threads))
+        self.assertFalse(failures)
+        self.assertEqual(len(results), 2)
+        self.assertEqual(results[0], results[1])
+        self.assertEqual(len(calls), 1)
+        verify_archive(results[0], spec)
 
     def test_midstream_failure_and_md5_retry_leave_no_partial_files(self):
         spec, data = fixture()
