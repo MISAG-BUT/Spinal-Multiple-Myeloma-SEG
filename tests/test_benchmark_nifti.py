@@ -289,14 +289,20 @@ class CliGeometryTests(unittest.TestCase):
             args = ["--input_dir", str(inputs), "--output_dir", str(root / "outputs"),
                     "--lesion_model", "709", "--install_models", "--cache_dir", str(root / "cache")]
             with patch("benchmark_model_installation.ModelInstaller") as installer, contextlib.redirect_stdout(io.StringIO()), contextlib.redirect_stderr(io.StringIO()):
-                self.assertEqual(cli(args), 2)
-                installer.assert_not_called()
-                nib.save(image(), path)
-                installer.return_value.resolve_plan.return_value = {802: ResolvedModel(root / "model", 802, "structural-only", {})}
-                self.assertEqual(cli(args), 3)
-                installer.assert_called_once_with(root / "cache")
-                installer.return_value.resolve_plan.side_effect = InstallationError("mock failure")
-                self.assertEqual(cli(args), 4)
+                from benchmark_model_installation import ModelInstaller
+                def execute(plan, validated):
+                    ModelInstaller(plan.cache_dir).resolve(plan.lesion_model.dataset_id, allow_download=plan.install_models)
+                    return root / "run"
+                with patch("benchmark_lesion_inference.run_lesion_pipeline", side_effect=execute) as run:
+                    self.assertEqual(cli(args), 2)
+                    installer.assert_not_called()
+                    run.assert_not_called()
+                    nib.save(image(), path)
+                    self.assertEqual(cli(args), 0)
+                    installer.assert_called_once_with(root / "cache")
+                    installer.return_value.resolve.assert_called_once_with(709, allow_download=True)
+                    installer.return_value.resolve.side_effect = InstallationError("mock failure")
+                    self.assertEqual(cli(args), 4)
             self.assertFalse((root / "outputs").exists())
             self.assertFalse((root / "cache").exists())
 
@@ -313,7 +319,7 @@ class CliGeometryTests(unittest.TestCase):
             supplied = base + ["--lesion_model", "710", "--spine_segmentation", str(mask)]
             before = {p: p.read_bytes() for p in root.rglob("*.nii.gz")}
             with patch("socket.socket", side_effect=AssertionError("network forbidden")), contextlib.redirect_stdout(io.StringIO()), contextlib.redirect_stderr(io.StringIO()):
-                self.assertEqual(cli(supplied), 3)
+                self.assertEqual(cli(supplied + ["--validate_only"]), 3)
                 self.assertFalse(output.exists())
                 _, segmentation, reference = validate_plan_inputs(parse_arguments(supplied))
                 compare_geometry(reference, segmentation)
@@ -323,7 +329,7 @@ class CliGeometryTests(unittest.TestCase):
             nib.save(image(), inputs / "ConvCT.nii.gz")
             with contextlib.redirect_stdout(io.StringIO()), contextlib.redirect_stderr(io.StringIO()):
                 for split in ("True", "False"):
-                    self.assertEqual(cli(base + ["--lesion_model", "710", "--split", split]), 3)
+                    self.assertEqual(cli(base + ["--lesion_model", "710", "--split", split, "--validate_only"]), 3)
             affine = image().affine.copy()
             affine[0, 3] += 1
             nib.save(image(affine=affine), inputs / "VMI_40.nii.gz")

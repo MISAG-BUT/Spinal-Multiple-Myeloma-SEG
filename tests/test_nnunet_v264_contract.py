@@ -53,7 +53,9 @@ class Nnunet264ContractTests(unittest.TestCase):
         cls.methods = {node.name: node for node in predictor.body if isinstance(node, ast.FunctionDef)}
 
     def test_adapter_calls_bind_to_actual_264_signatures(self):
-        adapter = (Path(__file__).resolve().parents[1] / "benchmark_spine_inference.py").read_text(encoding="utf-8")
+        root = Path(__file__).resolve().parents[1]
+        adapter = "\n".join((root / filename).read_text(encoding="utf-8")
+                            for filename in ("benchmark_spine_inference.py", "benchmark_lesion_inference.py"))
         targets = {"nnUNetPredictor": "__init__",
                    "initialize_from_trained_model_folder": "initialize_from_trained_model_folder",
                    "predict_from_files_sequential": "predict_from_files_sequential"}

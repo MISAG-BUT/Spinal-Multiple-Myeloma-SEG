@@ -105,14 +105,32 @@ def compare_geometry(reference, image, label="image"):
         raise ValueError("{}: affine alignment differs by {:.6g} mm (tolerance 0.001 mm); supply aligned inputs".format(label, distance))
 
 
-def validate_spine_segmentation(image):
-    validate_image(image, "spine segmentation")
+def validate_label_values(image, label="segmentation", *, nonnegative=True,
+                          allow_empty=True, allowed_labels=None):
+    """Validate exact labels without converting integer arrays to floating point.
+
+    Integer-valued floating storage is accepted, but fractional values are never
+    rounded. Python integers preserve uint64 precision during allowed-set checks.
+    """
+    validate_image(image, label)
     data = np.asanyarray(image.dataobj)
-    if np.any(data != np.rint(data)):
-        raise ValueError("Spine segmentation must contain integer labels, not probabilities")
-    if not np.any(data != 0):
-        raise ValueError("Spine segmentation is empty (no nonzero labels)")
+    if data.dtype.kind == "f" and np.any(data != np.trunc(data)):
+        raise ValueError("{} must contain exact integer labels, not probabilities".format(label))
+    if nonnegative and np.any(data < 0):
+        raise ValueError("{} must contain nonnegative labels".format(label))
+    if not allow_empty and not np.any(data != 0):
+        raise ValueError("{} is empty (no nonzero labels)".format(label))
+    if allowed_labels is not None:
+        allowed = set(allowed_labels)
+        if any(int(value) not in allowed for value in np.unique(data)):
+            raise ValueError("{} contains labels outside the model-specific allowed set".format(label))
     return image
+
+
+def validate_spine_segmentation(image):
+    # Preserve Phase 2's nonzero-mask contract; execution validation additionally
+    # rejects negative spine labels through validate_labels().
+    return validate_label_values(image, "spine segmentation", nonnegative=False, allow_empty=False)
 
 
 def _new_image(data, source, affine):
@@ -134,6 +152,21 @@ def _new_image(data, source, affine):
 def binary_spine_mask(segmentation):
     validate_spine_segmentation(segmentation)
     return _new_image((np.asanyarray(segmentation.dataobj) != 0).astype(np.uint8), segmentation, segmentation.affine)
+
+
+def image_on_reference_grid(data, reference):
+    """Copy already-aligned voxel data onto a reference, retaining coded forms.
+
+    No interpolation is performed. Callers must first validate grid alignment.
+    """
+    if data.shape != reference.shape:
+        raise ValueError("Data dimensions do not match reference grid")
+    result = _new_image(data, reference, reference.affine)
+    qform, qcode = reference.get_qform(coded=True)
+    sform, scode = reference.get_sform(coded=True)
+    result.set_qform(qform, int(qcode))
+    result.set_sform(sform, int(scode))
+    return result
 
 
 @dataclass(frozen=True)
@@ -207,7 +240,12 @@ def prepare_lesion_channels(dataset_id, reconstructions, segmentation, reference
     for name in model.required_modalities:
         compare_geometry(reference, reconstructions[name], name)
     crop = padded_bounding_box(binary)
-    images = tuple(crop_image(reconstructions[name], crop) for name in model.required_modalities) + (crop_image(binary, crop),)
+    cropped_reference = crop_image(reference, crop)
+    # Geometry validation establishes matching voxel indices. Use the single
+    # reference metadata for every channel, including sub-tolerance differences
+    # and physically equivalent declared spatial units; do not resample data.
+    images = tuple(image_on_reference_grid(np.asanyarray(crop_image(source, crop).dataobj), cropped_reference)
+                   for source in tuple(reconstructions[name] for name in model.required_modalities) + (binary,))
     return PreparedChannels(model.channel_names, images, crop, reference)
 
 
@@ -222,19 +260,18 @@ def save_prepared_channels(prepared, output_dir):
 
 
 def reconstruct_lesions(prediction, crop, reference, output_path=None):
-    """Reconstruct strict 0/1 lesions. Future inference must verify model labels.
+    """Reconstruct strict 0/1 lesions; caller verifies the model's output convention.
 
     Explicit saving uses a complete validated temporary NIfTI and an atomic
     no-clobber hard link. Filesystems without hard links fail safely.
     """
     expected = crop_image(reference, crop)
     compare_geometry(expected, prediction, "cropped lesion prediction")
+    validate_label_values(prediction, "Lesion prediction (binary 0/1)", allowed_labels=(0, 1))
     data = np.asanyarray(prediction.dataobj)
-    if not np.isin(data, (0, 1)).all():
-        raise ValueError("Lesion prediction must contain only binary labels 0 and 1")
     full = np.zeros(reference.shape, dtype=np.uint8)
     full[crop.slices] = data.astype(np.uint8)
-    result = _new_image(full, reference, reference.affine)
+    result = image_on_reference_grid(full, reference)
     if output_path is not None:
         save_nifti_no_clobber(result, output_path)
     return result

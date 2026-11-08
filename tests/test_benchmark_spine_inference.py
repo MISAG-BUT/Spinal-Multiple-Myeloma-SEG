@@ -354,7 +354,7 @@ sys.exit(cli(sys.argv[1:]))
             with patch("benchmark_spine_inference.ModelInstaller", return_value=installer), patch("benchmark_spine_inference.create_predictor", side_effect=SpineInferenceError("missing dependencies")):
                 self.assertEqual(cli(base), 5)
             with patch("benchmark_spine_inference.run_spine_only", side_effect=AssertionError("no partial lesion run")):
-                self.assertEqual(cli(base[:-1] + ["--lesion_model", "709"]), 3)
+                self.assertEqual(cli(base[:-1] + ["--lesion_model", "709", "--validate_only"]), 3)
 
     def test_concurrent_runs_have_unique_outputs(self):
         self.save_ct()

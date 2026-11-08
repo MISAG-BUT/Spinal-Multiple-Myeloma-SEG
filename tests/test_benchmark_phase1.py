@@ -193,11 +193,11 @@ class CliTests(unittest.TestCase):
         sentinel.write_bytes(b"prior result")
         before = {str(p.relative_to(self.root)): p.read_bytes() for p in self.root.rglob("*") if p.is_file()}
         stdout, stderr = io.StringIO(), io.StringIO()
-        with patch("benchmark_nifti.validate_plan_inputs"), patch("socket.socket", side_effect=AssertionError("network forbidden")), contextlib.redirect_stdout(stdout), contextlib.redirect_stderr(stderr):
-            self.assertEqual(cli(self.base + self.supplied(710)), 3)
+        with patch("benchmark_nifti.validate_plan_inputs", return_value=({}, None, None)), patch("socket.socket", side_effect=AssertionError("network forbidden")), contextlib.redirect_stdout(stdout), contextlib.redirect_stderr(stderr):
+            self.assertEqual(cli(self.base + self.supplied(710) + ["--validate_only"]), 3)
         self.assertIn("model 802 bypassed", stdout.getvalue())
         self.assertIn("mask_spine", stdout.getvalue())
-        self.assertIn("not yet implemented", stderr.getvalue())
+        self.assertIn("Validation only", stdout.getvalue())
         after = {str(p.relative_to(self.root)): p.read_bytes() for p in self.root.rglob("*") if p.is_file()}
         self.assertEqual(before, after)
         self.assertFalse(any(name in sys.modules for name in ("torch", "nnunetv2", "SimpleITK")))

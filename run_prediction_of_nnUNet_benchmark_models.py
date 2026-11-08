@@ -1,4 +1,4 @@
-"""V3 Phase 4A: spine-only execution; lesion inference remains unimplemented.
+"""V3 Phase 4B: standalone spine and benchmark lesion execution.
 
 Later stages must binarize nonzero spine labels before a shared five-voxel crop,
 translate cropped affines, retain published normalization/plans, and reconstruct
@@ -37,7 +37,7 @@ class ExecutionPlan:
 
 def build_parser():
     parser = argparse.ArgumentParser(
-        description="V3 benchmark prediction (Phase 4A: spine-only inference)",
+        description="V3 benchmark prediction (Phase 4B: spine and benchmark lesions)",
         allow_abbrev=False,
     )
     parser.add_argument("--input_dir", required=True, type=Path)
@@ -127,14 +127,17 @@ def cli(argv=None):
         if plan.lesion_model is None:
             from benchmark_spine_inference import validate_spine_inputs
             validated_inputs = validate_spine_inputs(plan, validated_inputs)
+        elif validated_inputs[1] is not None:
+            from benchmark_spine_inference import validate_labels
+            validate_labels(validated_inputs[1])
     except (ValueError, OSError) as error:
         print("V3 input validation failed: {}".format(error), file=sys.stderr)
         return 2
-    print("V3 Phase 4A execution plan (NIfTI content and geometry validated)")
+    print("V3 Phase 4B execution plan (NIfTI content and geometry validated)")
     print("Input: {}\nOutput destination (not created): {}".format(plan.input_dir, plan.output_dir))
     if plan.spine_segmentation is None:
         print("Automatic spine segmentation: model 802, fold_all; split={}".format(plan.split))
-        print("Spine model source: {}".format(plan.spine_model_dir or "future managed model resolution"))
+        print("Spine model source: {}".format(plan.spine_model_dir or "managed model cache"))
     else:
         print("Supplied spine segmentation: {}; model 802 bypassed; split not applicable".format(plan.spine_segmentation))
     if plan.lesion_model is None:
@@ -164,19 +167,22 @@ def cli(argv=None):
         print("Spine segmentation completed: {}".format(result / "spine" / "spine_labelled.nii.gz"))
         print("Run manifest: {}".format(result / "run.json"))
         return 0
-    if plan.install_models:
-        from benchmark_model_installation import ModelInstaller, InstallationError
-        try:
-            for model_id, resolved in ModelInstaller(plan.cache_dir).resolve_plan(plan).items():
-                print("Model {}: {} ({})".format(model_id, resolved.model_directory, resolved.verification))
-                if resolved.verification == "structural-only":
-                    print("Warning: external spine checkpoint identity is not cryptographically verified", file=sys.stderr)
-        except (InstallationError, OSError) as error:
-            print("V3 model installation failed: {}".format(error), file=sys.stderr)
-            return 4
-    print("Lesion inference is not yet implemented (Phase 4B). No predictions or patient output directories were created."
-          + (" Model resolution was requested." if plan.install_models else " No downloads were attempted."), file=sys.stderr)
-    return 3
+    from benchmark_lesion_inference import run_lesion_pipeline, LesionInferenceError
+    from benchmark_spine_inference import SpineInferenceError
+    from benchmark_model_installation import InstallationError
+    try:
+        result = run_lesion_pipeline(plan, validated_inputs)
+    except InstallationError as error:
+        print("V3 model resolution failed: {}".format(error), file=sys.stderr)
+        return 4
+    except (LesionInferenceError, SpineInferenceError, ValueError, OSError) as error:
+        print("V3 lesion pipeline failed: {}".format(error), file=sys.stderr)
+        if isinstance(error, FileExistsError):
+            print("Output destination already exists and was preserved. Retry for a new run ID or choose another output directory.", file=sys.stderr)
+        return 5
+    print("Lesion segmentation completed: {}".format(result / "lesion" / "lesion_labelled.nii.gz"))
+    print("Run manifest: {}".format(result / "run.json"))
+    return 0
 
 
 if __name__ == "__main__":

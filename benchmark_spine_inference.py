@@ -18,7 +18,8 @@ from benchmark_model_registry import SPINE_MODEL
 from benchmark_model_installation import ModelInstaller, InstallationError, _publish_directory
 from benchmark_nifti import (
     Crop, _new_image, binary_spine_mask, compare_geometry, crop_image,
-    load_nifti, save_nifti_no_clobber, validate_image,
+    load_nifti, save_nifti_no_clobber, validate_image, image_on_reference_grid,
+    validate_label_values,
 )
 
 
@@ -26,7 +27,7 @@ class SpineInferenceError(RuntimeError):
     """Model execution or output validation failed; no completed run published."""
 
 
-def create_predictor():
+def create_predictor(inference_name="Automatic spine inference"):
     """Use V2 sliding-window settings; sequential file API avoids worker spawning."""
     try:
         import torch
@@ -34,7 +35,7 @@ def create_predictor():
     except (ImportError, OSError, RuntimeError) as error:
         raise SpineInferenceError("Cannot import nnU-Net inference dependencies. Install nnunetv2==2.6.4 and a compatible PyTorch/CUDA environment: {}".format(error)) from error
     if not torch.cuda.is_available():
-        raise SpineInferenceError("Automatic spine inference requires a CUDA-enabled PyTorch installation and an available GPU")
+        raise SpineInferenceError("{} requires a CUDA-enabled PyTorch installation and an available GPU".format(inference_name))
     return nnUNetPredictor(
         tile_step_size=0.5, use_gaussian=True, use_mirroring=True,
         perform_everything_on_device=True, device=torch.device("cuda", 0),
@@ -44,17 +45,11 @@ def create_predictor():
 
 def validate_labels(image, *, allow_empty=False, allowed_labels=None):
     """Keep exact discrete nonnegative labels; permit background-only split parts."""
-    validate_image(image, "spine prediction")
+    validate_label_values(image, "Spine prediction", allow_empty=allow_empty, allowed_labels=allowed_labels)
     data = np.asanyarray(image.dataobj)
-    if np.any(data < 0) or np.any(data != np.rint(data)):
-        raise ValueError("Spine labels must be nonnegative integers, not probabilities")
     maximum = int(data.max())
     if maximum > np.iinfo(np.uint64).max:
         raise ValueError("Spine labels exceed the supported uint64 range")
-    if not allow_empty and maximum == 0:
-        raise ValueError("Spine segmentation is empty")
-    if allowed_labels is not None and not np.isin(data, list(allowed_labels)).all():
-        raise ValueError("Automatic prediction contains labels outside model 802 dataset.json")
     return image
 
 
@@ -62,14 +57,7 @@ def _label_image(data, reference):
     maximum = int(data.max())
     dtype = next(dtype for dtype in (np.uint8, np.uint16, np.uint32, np.uint64)
                  if maximum <= np.iinfo(dtype).max)
-    result = _new_image(data.astype(dtype), reference, reference.affine)
-    # Full-grid outputs retain the reference's coded transforms, including
-    # qform-only images whose affine must not be replaced by rounded sform data.
-    qform, qcode = reference.get_qform(coded=True)
-    sform, scode = reference.get_sform(coded=True)
-    result.set_qform(qform, int(qcode))
-    result.set_sform(sform, int(scode))
-    return result
+    return image_on_reference_grid(data.astype(dtype), reference)
 
 
 def split_crops(reference, split=True):

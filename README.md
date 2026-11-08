@@ -1,15 +1,16 @@
 # Spinal-Multiple-Myeloma-SEG
 
-## V3 benchmark prediction — Phase 4A (spine execution)
+## V3 benchmark prediction — Phase 4B (end-to-end spine and lesions)
 
 V3 is independent of the existing V1 TCIA/DICOM and V2 NIfTI workflows.
-**Spine-only execution is implemented; lesion inference remains unimplemented.**
+**Spine-only and end-to-end benchmark lesion execution are implemented.**
 This research preview has not been validated with real-model GPU inference.
 `--skip_lesion_segmentation` executes the spine workflow and exits **0** only
-after publishing a validated completed run. Requests selecting a lesion model
-remain explicit previews and exit **3**, without producing partial predictions.
+after publishing a validated completed run. `--lesion_model 700–718` executes
+spine preparation and the selected five-fold lesion model, also exiting **0**
+only after the entire run has been published.
 Invalid input validation exits **2**, model resolution/installation errors exit
-**4**, and spine inference/publication errors exit **5**. No download is attempted
+**4**, and inference/reconstruction/publication errors exit **5**. No download is attempted
 unless `--install_models` is supplied. Add `--validate_only` to validate and print
 the plan without installation, inference, or output creation (exit **3**).
 
@@ -17,7 +18,7 @@ After package installation, use `spinal-run-nnunet-benchmark-prediction`, or run
 `python run_prediction_of_nnUNet_benchmark_models.py` directly.
 
 ```bash
-# Planned automatic model-802 spine inference plus benchmark lesion model 710:
+# Automatic model-802 spine inference plus benchmark lesion model 710:
 spinal-run-nnunet-benchmark-prediction \
   --input_dir /data/patient_001 --output_dir /data/results --lesion_model 710
 
@@ -38,6 +39,34 @@ are `ConvCT.nii.gz`, `VMI_40.nii.gz`, `VMI_80.nii.gz`, `VMI_120.nii.gz`,
 `CaSupp_100.nii.gz`. Only selected-model reconstructions are required, plus
 ConvCT when no spine segmentation is supplied. Discovery is not recursive;
 unrelated files are ignored. Sources are never modified.
+
+The registry is authoritative for exact channel order. The required lesion
+reconstructions are listed below; a binary spine mask is appended as the **last
+channel** for every model. Automatic spine inference additionally needs ConvCT
+even when the lesion model excludes it. Supplied-mask inference needs only the
+selected model's reconstructions, so model 710 can run without ConvCT.
+
+| Lesion model | Required reconstructions |
+|---|---|
+| 700 | All eight except ConvCT |
+| 701 | All eight except VMI_40 |
+| 702 | All eight except VMI_80 |
+| 703 | All eight except VMI_120 |
+| 704 | All eight except CaSupp_25 |
+| 705 | All eight except CaSupp_50 |
+| 706 | All eight except CaSupp_75 |
+| 707 | All eight except CaSupp_100 |
+| 708 | All eight |
+| 709 | ConvCT |
+| 710 | VMI_40 |
+| 711 | VMI_80 |
+| 712 | VMI_120 |
+| 713 | CaSupp_25 |
+| 714 | CaSupp_50 |
+| 715 | CaSupp_75 |
+| 716 | CaSupp_100 |
+| 717 | VMI_40, VMI_80, VMI_120 |
+| 718 | CaSupp_25, CaSupp_50, CaSupp_75, CaSupp_100 |
 
 Arguments: required `--input_dir` and `--output_dir`; exactly one of
 `--lesion_model 700–718` or `--skip_lesion_segmentation`; optional
@@ -68,9 +97,148 @@ spinal-run-nnunet-benchmark-prediction \
 This may download approximately 3.68 GB for automatic spine model 802 and 1.66 GB
 for the selected lesion model. A supplied spine segmentation bypasses model 802
 entirely; spine-only mode downloads no lesion model. Installation failure exits
-with code **4**. A request selecting a lesion model still exits **3** after model
-installation, because lesion inference is unimplemented. A spine-only request
-continues to spine execution. Existing patient outputs are never overwritten.
+with code **4**. Without the flag, missing models fail with installation guidance
+and no HTTP requests. Before any predictor is constructed, all required models
+are resolved and the selected lesion model's metadata is validated. Automatic
+mode resolves 802 plus the selected lesion model; supplied-mask mode resolves
+only the lesion model. A missing lesion model therefore cannot be discovered
+only after expensive spine inference. Existing patient outputs are never overwritten.
+
+### End-to-end lesion execution
+
+```bash
+# All eight reconstructions, automatic spine:
+spinal-run-nnunet-benchmark-prediction \
+  --input_dir /data/patient_001 --output_dir /data/results --lesion_model 708
+
+# Supplied spine; ConvCT plus binary conditioning mask for model 709:
+spinal-run-nnunet-benchmark-prediction \
+  --input_dir /data/patient_001 --output_dir /data/results \
+  --spine_segmentation /data/masks/spine.nii.gz --lesion_model 709
+
+# Validate supplied-mask CaSupp-only model inputs; no model resolution or CUDA:
+spinal-run-nnunet-benchmark-prediction \
+  --input_dir /data/patient_001 --output_dir /data/results \
+  --spine_segmentation /data/masks/spine.nii.gz --lesion_model 718 --validate_only
+```
+
+`benchmark_lesion_inference.py` reuses the Phase 4A spine adapter or the supplied
+labels, converts nonzero spine labels to binary, and uses the existing common
+five-voxel padded crop. Crop bounds are clipped to the original image dimensions
+and stored with exclusive upper bounds. Ordered channel files are constructed
+internally; users never need `_0000` filenames. All channels use one cropped
+reference geometry after passing the existing 0.001 mm alignment checks. This
+assigns metadata to already-aligned voxel indices; it does not resample voxel
+data or change intensities. The final channel is binary, never vertebral labels.
+
+The lesion adapter checks `dataset.json` channels against the registry and
+requires the published binary output convention (`0` background, `1` lesion).
+It initializes `nnUNetTrainer__nnUNetPlans__3d_fullres` using
+`checkpoint_final.pth` and folds **0, 1, 2, 3, 4**. It uses sequential explicit
+file lists and the same CUDA sliding-window settings as the spine adapter.
+Normalization/resampling inside nnU-Net follows the installed published plans;
+no external normalization, morphology, or modality substitution is performed.
+
+The cropped prediction must match the cropped input geometry and contain only
+the model's valid binary labels. A **background-only lesion prediction is valid**
+and produces a successful all-zero full-volume lesion mask. Fractional, negative,
+nonfinite, or other labels are rejected rather than binarized. Reconstruction
+inserts the crop by exact voxel indices, leaves background outside the crop, and
+restores the reference dimensions, affine, qform/sform codes, and spatial units.
+The reference is ConvCT for automatic spine mode, or the first required lesion
+modality for supplied-mask lesion mode. No interpolation is performed here.
+Integer-valued floating NIfTI storage (for example, exact `0.0` and `1.0`) is
+accepted consistently with spine labels. There is no label rounding or epsilon
+tolerance. Integer arrays, including uint64 spine labels above `2**53`, are
+validated without converting them to floating point. Prediction-domain checks
+use each model's allowed labels, separately from geometry tolerance.
+
+Complete lesion runs have this structure:
+
+```text
+<output_dir>/run-<unique-id>/
+  run.json
+  spine/
+    spine_labelled.nii.gz
+    spine_binary.nii.gz
+    spine_supplied.nii.gz     # supplied mode only, byte-identical source copy
+  lesion/
+    lesion_labelled.nii.gz
+```
+
+The entire run stays in a unique private staging directory until both stages,
+reconstruction, validated NIfTI writing, and the manifest complete. A failed
+spine/lesion prediction, reconstruction, or publication exposes no completed run;
+owned temporary channels and prediction files are cleaned. Existing results are
+preserved. Completed runs contain no cropped channels or nnU-Net working files.
+Phase 4B manifests use schema version 2 and record lesion ID/name, trainer/plans/
+configuration, folds/checkpoint, model verification/artifact provenance, spine
+source and model-802 provenance, requested/effective split, input modalities,
+ordered channels, exclusive crop bounds/padding, reference/cropped/output
+geometries, relative output paths, completion time/status, and lesion completion.
+No absolute patient paths or voxel data are included. Spine-only manifests retain
+the Phase 4A schema version 1 and existing output contract.
+
+### Scientific reproducibility review
+
+The review used the clean local benchmarking repository at commit
+`9cd13bd7d31eba930d6e925fd37cc8f126e63dd3` and the cached nnU-Net v2.6.4 tag
+identified below. It did not inspect patient images or load model weights.
+
+- **Channels and mask:** all 19 ordered channel lists in the benchmark's
+  [model-configuration table](https://github.com/MISAG-BUT/Spinal-Multiple-Myeloma-SEG-models-benchmarking/blob/9cd13bd7d31eba930d6e925fd37cc8f126e63dd3/results/tables/model_configuration/model_configurations.csv)
+  match the V3 registry. The benchmark [input documentation](https://github.com/MISAG-BUT/Spinal-Multiple-Myeloma-SEG-models-benchmarking/blob/9cd13bd7d31eba930d6e925fd37cc8f126e63dd3/README.md#input-data-and-output-segmentation)
+  requires aligned reconstructions and a final binary mask, and states that
+  vertebral masks were manually corrected. Automatic V3 masks are a different
+  input-quality condition; comparable accuracy has not been demonstrated.
+- **Crop and external preparation:** `prepare_full_model_folds()` in the
+  [benchmark inference script](https://github.com/MISAG-BUT/Spinal-Multiple-Myeloma-SEG-models-benchmarking/blob/9cd13bd7d31eba930d6e925fd37cc8f126e63dd3/inference/run_predictions.sh#L143)
+  copies existing `imagesTr` channel files into held-out fold folders. No original
+  dataset-generation implementation is present in that checkout. Binary-mask
+  bounding-box calculation, exact padding, inclusive/exclusive bounds, clamping,
+  additional slice restrictions, prior intensity clipping/shifting, external
+  resampling/reorientation, and training crop-affine handling therefore cannot
+  be established from that script. V3 retains the requested five-voxel padded
+  nonzero-mask crop; the legacy V2 implementation is not proof of the benchmark's
+  original training preparation.
+- **Normalization:** the benchmark's
+  [configuration summary](https://github.com/MISAG-BUT/Spinal-Multiple-Myeloma-SEG-models-benchmarking/blob/9cd13bd7d31eba930d6e925fd37cc8f126e63dd3/results/tables/model_configuration/model_configuration_summary.csv)
+  reports `ZScoreNormalization` for all models. nnU-Net v2.6.4's
+  `DefaultPreprocessor` handles its internal nonzero crop, configured
+  normalization, and resampling. V3 adds no intensity transforms and changes no
+  published plans. This does not establish how the original `imagesTr` files
+  were prepared before nnU-Net consumed them.
+- **Inference is intentionally different from paper evaluation:**
+  `run_full_models()` predicts held-out cases with `-f "$FOLD"`, one fold at a
+  time. The benchmark README separately recommends `-f 0 1 2 3 4` for new-data
+  inference. V3 follows the requested five-fold ensemble. It must not be used to
+  reproduce held-out-fold scores on training-set cases, where other ensemble
+  folds may have trained on those cases. Trainer/configuration and final
+  checkpoint selection agree with the documented framework/defaults.
+- **Reconstruction:** nnU-Net export restores predictions to its input grid.
+  V3 additionally restores its external spinal crop by voxel insertion into a
+  zero-filled full-size reference, preserving coded forms and spatial units.
+  A corresponding benchmark full-volume restoration implementation is absent,
+  so exact agreement with that additional step cannot be asserted.
+- **Environment provenance:** the benchmark setup script pins nnU-Net commit
+  `f6d221d1b79cd2173650f78f97ecfee273e0cf86`, which was not available in the local
+  nnU-Net object cache. The local v2.6.4 tag verifies the V3 API contract, but not
+  identity with that historical environment. No network retrieval was needed
+  for this review.
+
+Shared channel metadata is assigned only **after** all source grids pass the
+0.001 mm physical-corner tolerance. Sub-tolerance differences are intentionally
+reconciled to one reference without changing voxel values; larger Euclidean
+offsets are rejected even when individual affine components differ by less than
+0.001. This does not perform registration or prove anatomical correspondence.
+
+Regression tests distinguish preflight model/metadata failures (exit 4) from
+predictor, reconstruction, NIfTI/manifest writing, and publication failures
+(exit 5). All failed runs retain existing results and remove their own staging
+files, including partially written manifests. Unexpected programmer errors are
+not broadly relabelled as ordinary prediction failures. Offline validation and
+source agreement do not establish exact scientific reproduction or real CUDA
+inference performance.
 
 ### Spine-only execution and outputs
 
@@ -145,8 +313,8 @@ Completed runs are published atomically in unique directories:
 filenames (without absolute patient paths), requested/effective split and any
 one-slice fallback, model ID/verification/artifact provenance/folds/checkpoint,
 reference/output geometries, and relative output paths. The binary mask contains
-1 for every nonzero spine label. It is available for later lesion conditioning;
-no lesion inference is performed. All temporary inputs and predictions are
+1 for every nonzero spine label. In spine-only mode no lesion inference is
+performed. All temporary inputs and predictions are
 run-specific and cleaned on failure. A failure in either split publishes no
 completed run and preserves existing results. An empty output root may remain
 after a failed execution. No success is reported until the complete run is
@@ -218,20 +386,20 @@ explicit reconstruction writing validates a complete temporary `.nii.gz`, then
 publishes via an atomic no-clobber hard link. Existing destinations, including
 concurrently created ones, remain untouched; failed temporary files are cleaned
 up. This requires filesystem hard-link support. Strict lesion labels remain 0/1;
-future inference must verify the published model's actual output-label convention
-before reconstruction. No external normalization or
+the lesion adapter verifies that convention against each installed model's
+metadata before inference. No external normalization or
 morphology is applied. These utilities do not perform inference.
 
 For lesion preprocessing, reference selection is ConvCT for automatic spine mode, the first required
 reconstruction for supplied-mask lesion mode, or the mask for supplied-mask
-spine-only mode. The CLI validates these grids without producing predictions.
-Lesion-model inference remains for Phase 4B. Published plans remain unchanged. Exact benchmark
+spine-only mode. `--validate_only` checks these grids without producing predictions.
+Published plans remain unchanged. Exact benchmark
 training crop padding/affine handling remains unverified; five-voxel padding
 preserves the existing pipeline's principle. Legacy V1/V2 utilities are unchanged.
 Managed models from Zenodo records 18598645 (spine 802, `fold_all`) and 19708429
 (lesions 700–718) will remain isolated from legacy installations.
 
-Run all offline registry, preprocessing, mock-archive installation, and fake-predictor spine tests with
+Run all offline registry, preprocessing, mock-archive installation, and fake-predictor spine/lesion tests with
 `python -B -m unittest discover -s tests -v`.
 An optional source-level contract test checks signatures and filename mapping
 against exactly nnU-Net 2.6.4 without importing its inference dependencies. It

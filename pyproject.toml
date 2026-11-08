@@ -41,6 +41,7 @@ spinal-run-nnunet-benchmark-prediction = "run_prediction_of_nnUNet_benchmark_mod
 
 [tool.setuptools]
 py-modules = [
+    "benchmark_lesion_inference",
     "benchmark_spine_inference",
     "benchmark_model_installation",
     "benchmark_nifti",
