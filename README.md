@@ -1,5 +1,150 @@
 # Spinal-Multiple-Myeloma-SEG
 
+## V3 benchmark prediction — Phase 3 preview
+
+V3 is independent of the existing V1 TCIA/DICOM and V2 NIfTI workflows.
+**Inference is not yet implemented; this preview is not production-ready.**
+It validates CLI combinations, file paths, NIfTI content and geometry, prints the execution plan, and
+exits with code **3**. Invalid inputs exit with code **2**. By default it does not
+download models, run GPU inference, or create outputs. Preprocessing utilities
+are implemented separately; the CLI does not persist intermediate channels.
+
+After package installation, use `spinal-run-nnunet-benchmark-prediction`, or run
+`python run_prediction_of_nnUNet_benchmark_models.py` directly.
+
+```bash
+# Planned automatic model-802 spine inference plus benchmark lesion model 710:
+spinal-run-nnunet-benchmark-prediction \
+  --input_dir /data/patient_001 --output_dir /data/results --lesion_model 710
+
+# Supplied spine mask: model 710 needs VMI_40, but no ConvCT:
+spinal-run-nnunet-benchmark-prediction \
+  --input_dir /data/patient_001 --output_dir /data/results \
+  --spine_segmentation /data/masks/spine.nii.gz --lesion_model 710
+
+# Planned automatic spine-only inference:
+spinal-run-nnunet-benchmark-prediction \
+  --input_dir /data/patient_001 --output_dir /data/results \
+  --skip_lesion_segmentation --split True
+```
+
+One input directory represents one examination. Exact case-sensitive filenames
+are `ConvCT.nii.gz`, `VMI_40.nii.gz`, `VMI_80.nii.gz`, `VMI_120.nii.gz`,
+`CaSupp_25.nii.gz`, `CaSupp_50.nii.gz`, `CaSupp_75.nii.gz`, and
+`CaSupp_100.nii.gz`. Only selected-model reconstructions are required, plus
+ConvCT when no spine segmentation is supplied. Discovery is not recursive;
+unrelated files are ignored. Sources are never modified.
+
+Arguments: required `--input_dir` and `--output_dir`; exactly one of
+`--lesion_model 700–718` or `--skip_lesion_segmentation`; optional
+`--spine_segmentation`, `--spine_model_dir`, `--cache_dir`, and `--split`.
+`--spine_model_dir` must name an existing directory and conflicts with
+`--spine_segmentation`. With model resolution requested, it must point to the
+model-802 `nnUNetTrainer__nnUNetPlans__3d_fullres` directory, whose metadata and
+`fold_all/checkpoint_final.pth` are structurally validated. This does not establish
+the external checkpoint's cryptographic identity or actual training version.
+Explicit `--split` also conflicts with a supplied segmentation. Otherwise its
+default is True, with V2 parsing: case-insensitive `true` enables splitting and
+every other supplied value disables it. The default cache is under LOCALAPPDATA
+on Windows, `~/Library/Caches` on macOS, or XDG_CACHE_HOME/`~/.cache` on Linux.
+`--cache_dir` overrides it. Validation-only runs do not create a cache.
+
+### Explicit model installation (no inference)
+
+Add **`--install_models`** to opt into model resolution after NIfTI validation:
+
+```bash
+spinal-run-nnunet-benchmark-prediction \
+  --input_dir /data/patient_001 --output_dir /data/results \
+  --lesion_model 710 --install_models --cache_dir /data/v3-cache
+```
+
+This may download approximately 3.68 GB for automatic spine model 802 and 1.66 GB
+for the selected lesion model. A supplied spine segmentation bypasses model 802
+entirely; spine-only mode downloads no lesion model. Installation failure exits
+with code **4**. Even after successful installation the preview exits **3** because
+inference remains unimplemented. Patient outputs are not created or modified.
+
+`benchmark_model_installation.ModelInstaller(cache_dir).resolve(id)` also provides
+the installation API; `resolve_plan(plan)` resolves only the plan's required
+models. It uses registry metadata, streams HTTPS downloads into `.part` files,
+restarts interrupted transfers from zero with bounded retries, and checks the
+complete archive size and published MD5 before extraction. Verified archives are
+retained under `archives/<record>/` for reuse. It extracts only the selected
+dataset subtree (only model 802 from the combined original-model archive).
+
+Managed models live under `models/<record>/<dataset>/`, separate from legacy
+installations. Each contains a `.v3-installation.json` receipt with record/release
+identity, artifact provenance, installation timestamp, and extracted-file SHA-256
+hashes. Reuse validates structure, registry identity, and all recorded file hashes
+without requiring a network connection. These receipts are local integrity
+records, not publisher signatures. External spine models are explicitly reported
+as **structural-only**, without claiming cryptographic verification.
+
+Extraction rejects traversal, absolute paths, links/special files, duplicate and
+case-colliding paths, Windows device/alternate-stream names, encryption, and
+unsupported compression. Installations are validated in `staging/` and promoted
+only when complete. Per-model exclusive locks under `locks/` serialize installation
+of the same dataset, while separate artifact locks protect shared downloads.
+Different lesion models can install concurrently within the same record.
+A timed-out stale lock requires manual inspection after
+confirming its process has stopped. Corrupt or incomplete installed directories
+are preserved and rejected, never silently overwritten. Only invalid cached
+archives/partial downloads for the requested artifact are removed. Keep the cache
+user-owned and inaccessible to untrusted writers. Linked cache paths are rejected.
+Archive publication requires filesystem hard-link support and fails safely if
+unavailable. No checkpoints are deserialized during installation.
+Complete staged model directories (including validated receipts) are published
+with atomic no-clobber renames: Windows rename, Linux `RENAME_NOREPLACE`, or
+macOS `RENAME_EXCL`. Existing destinations, including empty directories created
+concurrently, are never replaced. Unsupported native/filesystem operations fail
+closed; no fallback uses an overwriting rename. Ordinary explicit ZIP directory
+entries are accepted, including DOS/Unix attributes and directories listed after
+their children. Unsafe entries in unselected models are still rejected.
+
+Inputs must be readable, nonempty, finite, real-valued 3D NIfTI images in RAS
+orientation. Dimensions and orientation must match; spacing and physical voxel
+alignment are checked with a **0.001 mm** tolerance (maximum Euclidean distance
+between corresponding voxel-centre corners). Spatial units must be declared as
+mm, meter, or micron; unknown units are rejected rather than assumed. Conflicting
+coded qform/sform transforms, singular affines, and NaN/infinity are rejected.
+No automatic reorientation, registration, or resampling is performed.
+
+Supplied spine masks must have nonempty, finite, integer-valued labels and match
+the required reconstruction grid. Probabilistic masks are rejected. All nonzero
+labels become 1 in a separate uint8 binary mask; original labels and source files
+remain unchanged. Supplied-mask model 710 still needs only VMI_40, without ConvCT.
+
+`benchmark_nifti.py` implements in-memory binary-mask preparation, a common
+five-voxel padded bounding box (clipped to boundaries, exclusive Python slice
+upper bounds), and ordered model-specific channel preparation. The binary spine
+mask is always last. Cropped affines are translated by the crop start so that
+physical voxel locations remain correct. Spatial units and compatible qform/sform
+codes are retained; a qform that cannot represent shear compatibly is disabled
+while the exact sform is retained. Explicit channel writing uses deterministic
+`case_0001_0000.nii.gz`, etc., in a fresh directory. Reconstruction validates the
+cropped binary lesion grid before insertion into the original reference grid;
+explicit reconstruction writing validates a complete temporary `.nii.gz`, then
+publishes via an atomic no-clobber hard link. Existing destinations, including
+concurrently created ones, remain untouched; failed temporary files are cleaned
+up. This requires filesystem hard-link support. Strict lesion labels remain 0/1;
+future inference must verify the published model's actual output-label convention
+before reconstruction. No external normalization or
+morphology is applied. These utilities do not perform inference.
+
+Reference selection is ConvCT for automatic spine mode, the first required
+reconstruction for supplied-mask lesion mode, or the mask for supplied-mask
+spine-only mode. The CLI validates these grids without producing predictions.
+Spine split/merge and all nnU-Net inference remain
+for future phases. Published plans remain unchanged. Exact benchmark
+training crop padding/affine handling remains unverified; five-voxel padding
+preserves the existing pipeline's principle. Legacy V1/V2 utilities are unchanged.
+Managed models from Zenodo records 18598645 (spine 802, `fold_all`) and 19708429
+(lesions 700–718) will remain isolated from legacy installations.
+
+Run all offline registry, preprocessing, and mock-archive installation tests with
+`python -B -m unittest discover -s tests -v`.
+
 ![Graphical Abstract](graphical_abstract.png "Overview of the dataset creation pipeline and data structure.")
 
 ## Overview

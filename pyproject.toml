@@ -24,6 +24,8 @@ classifiers = [
 ]
 requires-python = ">=3.8"
 dependencies = [
+    "nibabel",
+    "numpy",
     "torch",
     "torchvision",
     "pydicom",
@@ -35,9 +37,14 @@ dependencies = [
 spinal-db-viewer = "spinal_mm_cli:database_viewer"
 spinal-run-nnunet-TCIA = "spinal_mm_cli:run_prediction_tcia"
 spinal-run-nnunet-new-prediction = "spinal_mm_cli:run_prediction_new"
+spinal-run-nnunet-benchmark-prediction = "run_prediction_of_nnUNet_benchmark_models:cli"
 
 [tool.setuptools]
 py-modules = [
+    "benchmark_model_installation",
+    "benchmark_nifti",
+    "benchmark_model_registry",
+    "run_prediction_of_nnUNet_benchmark_models",
     "Database_viewer_final",
     "run_prediction_of_nnUNet_networks_on_TCIA_data_final",
     "run_prediction_of_nnUNet_networks_on_new_data",
