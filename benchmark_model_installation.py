@@ -364,7 +364,7 @@ class ModelInstaller:
             raise InstallationError("Managed model integrity/provenance mismatch: {}. Existing files were preserved.".format(dataset))
         return ResolvedModel(trainer, spec.dataset_id, "pinned-archive-and-local-sha256", receipt)
 
-    def resolve(self, dataset_id, *, spine_model_dir=None):
+    def resolve(self, dataset_id, *, spine_model_dir=None, allow_download=True):
         """Resolve/install one model. Explicit external spine models are read-only.
 
         External paths must point at the trainer directory. Structural acceptance
@@ -384,6 +384,8 @@ class ModelInstaller:
             dataset = _plain_path(parent / spec.dataset_name)
             if dataset.exists():
                 return self._managed(dataset, spec)
+            if not allow_download:
+                raise InstallationError("Model {} is not installed. Re-run with --install_models to authorize installation, or supply --spine_model_dir for model 802. No download was attempted.".format(dataset_id))
             archive = self._download(spec)
             staging_root = self._directory("staging")
             with tempfile.TemporaryDirectory(prefix="model-{}-".format(dataset_id), dir=str(staging_root)) as temporary:

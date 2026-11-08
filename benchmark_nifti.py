@@ -236,24 +236,30 @@ def reconstruct_lesions(prediction, crop, reference, output_path=None):
     full[crop.slices] = data.astype(np.uint8)
     result = _new_image(full, reference, reference.affine)
     if output_path is not None:
-        path = Path(output_path)
-        if not str(path).endswith(".nii.gz"):
-            raise ValueError("Reconstruction output must end with .nii.gz")
-        descriptor, temporary_name = tempfile.mkstemp(prefix=".v3-lesions-", suffix=".nii.gz", dir=str(path.parent))
-        os.close(descriptor)
-        temporary = Path(temporary_name)
-        try:
-            nib.save(result, str(temporary))
-            written = load_nifti(temporary)
-            compare_geometry(result, written, "saved reconstruction")
-            if not np.array_equal(np.asanyarray(written.dataobj), full):
-                raise ValueError("Saved reconstruction voxel verification failed")
-            with temporary.open("rb+") as stream:
-                os.fsync(stream.fileno())
-            os.link(str(temporary), str(path))
-        finally:
-            temporary.unlink()
+        save_nifti_no_clobber(result, output_path)
     return result
+
+
+def save_nifti_no_clobber(image, output_path):
+    """Validate a complete temporary NIfTI before atomic no-clobber publication."""
+    validate_image(image)
+    path = Path(output_path)
+    if not str(path).endswith(".nii.gz"):
+        raise ValueError("NIfTI output must end with .nii.gz")
+    descriptor, temporary_name = tempfile.mkstemp(prefix=".v3-nifti-", suffix=".nii.gz", dir=str(path.parent))
+    os.close(descriptor)
+    temporary = Path(temporary_name)
+    try:
+        nib.save(image, str(temporary))
+        written = load_nifti(temporary)
+        compare_geometry(image, written, "saved NIfTI")
+        if not np.array_equal(np.asanyarray(written.dataobj), np.asanyarray(image.dataobj)):
+            raise ValueError("Saved NIfTI voxel verification failed")
+        with temporary.open("rb+") as stream:
+            os.fsync(stream.fileno())
+        os.link(str(temporary), str(path))
+    finally:
+        temporary.unlink()
 
 
 def validate_plan_inputs(plan):

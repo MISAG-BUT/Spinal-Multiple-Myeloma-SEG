@@ -287,7 +287,7 @@ class CliGeometryTests(unittest.TestCase):
             path = inputs / "ConvCT.nii.gz"
             path.write_bytes(b"invalid NIfTI")
             args = ["--input_dir", str(inputs), "--output_dir", str(root / "outputs"),
-                    "--skip_lesion_segmentation", "--install_models", "--cache_dir", str(root / "cache")]
+                    "--lesion_model", "709", "--install_models", "--cache_dir", str(root / "cache")]
             with patch("benchmark_model_installation.ModelInstaller") as installer, contextlib.redirect_stdout(io.StringIO()), contextlib.redirect_stderr(io.StringIO()):
                 self.assertEqual(cli(args), 2)
                 installer.assert_not_called()
@@ -318,7 +318,7 @@ class CliGeometryTests(unittest.TestCase):
                 _, segmentation, reference = validate_plan_inputs(parse_arguments(supplied))
                 compare_geometry(reference, segmentation)
                 spine_only = base + ["--skip_lesion_segmentation", "--spine_segmentation", str(mask)]
-                self.assertEqual(cli(spine_only), 3)
+                self.assertEqual(cli(spine_only + ["--validate_only"]), 3)
             self.assertEqual(before, {p: p.read_bytes() for p in root.rglob("*.nii.gz")})
             nib.save(image(), inputs / "ConvCT.nii.gz")
             with contextlib.redirect_stdout(io.StringIO()), contextlib.redirect_stderr(io.StringIO()):

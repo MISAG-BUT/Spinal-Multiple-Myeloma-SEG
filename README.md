@@ -1,13 +1,17 @@
 # Spinal-Multiple-Myeloma-SEG
 
-## V3 benchmark prediction — Phase 3 preview
+## V3 benchmark prediction — Phase 4A (spine execution)
 
 V3 is independent of the existing V1 TCIA/DICOM and V2 NIfTI workflows.
-**Inference is not yet implemented; this preview is not production-ready.**
-It validates CLI combinations, file paths, NIfTI content and geometry, prints the execution plan, and
-exits with code **3**. Invalid inputs exit with code **2**. By default it does not
-download models, run GPU inference, or create outputs. Preprocessing utilities
-are implemented separately; the CLI does not persist intermediate channels.
+**Spine-only execution is implemented; lesion inference remains unimplemented.**
+This research preview has not been validated with real-model GPU inference.
+`--skip_lesion_segmentation` executes the spine workflow and exits **0** only
+after publishing a validated completed run. Requests selecting a lesion model
+remain explicit previews and exit **3**, without producing partial predictions.
+Invalid input validation exits **2**, model resolution/installation errors exit
+**4**, and spine inference/publication errors exit **5**. No download is attempted
+unless `--install_models` is supplied. Add `--validate_only` to validate and print
+the plan without installation, inference, or output creation (exit **3**).
 
 After package installation, use `spinal-run-nnunet-benchmark-prediction`, or run
 `python run_prediction_of_nnUNet_benchmark_models.py` directly.
@@ -22,7 +26,7 @@ spinal-run-nnunet-benchmark-prediction \
   --input_dir /data/patient_001 --output_dir /data/results \
   --spine_segmentation /data/masks/spine.nii.gz --lesion_model 710
 
-# Planned automatic spine-only inference:
+# Automatic spine-only inference (requires an installed model 802 and CUDA):
 spinal-run-nnunet-benchmark-prediction \
   --input_dir /data/patient_001 --output_dir /data/results \
   --skip_lesion_segmentation --split True
@@ -37,7 +41,9 @@ unrelated files are ignored. Sources are never modified.
 
 Arguments: required `--input_dir` and `--output_dir`; exactly one of
 `--lesion_model 700–718` or `--skip_lesion_segmentation`; optional
-`--spine_segmentation`, `--spine_model_dir`, `--cache_dir`, and `--split`.
+`--spine_segmentation`, `--spine_model_dir`, `--cache_dir`, `--split`,
+`--install_models`, and `--validate_only`. Validation-only and installation flags
+cannot be combined.
 `--spine_model_dir` must name an existing directory and conflicts with
 `--spine_segmentation`. With model resolution requested, it must point to the
 model-802 `nnUNetTrainer__nnUNetPlans__3d_fullres` directory, whose metadata and
@@ -49,7 +55,7 @@ every other supplied value disables it. The default cache is under LOCALAPPDATA
 on Windows, `~/Library/Caches` on macOS, or XDG_CACHE_HOME/`~/.cache` on Linux.
 `--cache_dir` overrides it. Validation-only runs do not create a cache.
 
-### Explicit model installation (no inference)
+### Explicit model installation
 
 Add **`--install_models`** to opt into model resolution after NIfTI validation:
 
@@ -62,8 +68,92 @@ spinal-run-nnunet-benchmark-prediction \
 This may download approximately 3.68 GB for automatic spine model 802 and 1.66 GB
 for the selected lesion model. A supplied spine segmentation bypasses model 802
 entirely; spine-only mode downloads no lesion model. Installation failure exits
-with code **4**. Even after successful installation the preview exits **3** because
-inference remains unimplemented. Patient outputs are not created or modified.
+with code **4**. A request selecting a lesion model still exits **3** after model
+installation, because lesion inference is unimplemented. A spine-only request
+continues to spine execution. Existing patient outputs are never overwritten.
+
+### Spine-only execution and outputs
+
+```bash
+# Use an already installed managed model; no automatic download:
+spinal-run-nnunet-benchmark-prediction \
+  --input_dir /data/patient_001 --output_dir /data/results \
+  --skip_lesion_segmentation --split True --cache_dir /data/v3-cache
+
+# Alternatively, use an external, structurally validated model-802 trainer folder:
+spinal-run-nnunet-benchmark-prediction \
+  --input_dir /data/patient_001 --output_dir /data/results \
+  --skip_lesion_segmentation --spine_model_dir /models/Dataset802/nnUNetTrainer__nnUNetPlans__3d_fullres
+
+# Supplied mask: no model resolution, CUDA, or nnU-Net is needed:
+spinal-run-nnunet-benchmark-prediction \
+  --input_dir /data/patient_001 --output_dir /data/results \
+  --skip_lesion_segmentation --spine_segmentation /data/masks/spine.nii.gz
+```
+
+Automatic spine inference uses only ConvCT, model 802 `fold_all`, and
+`checkpoint_final.pth`. Inference dependencies load lazily and require an
+installed nnU-Net and CUDA-enabled PyTorch. The constructor, initialization,
+sequential method, manager attributes, and export behavior were verified from a
+clean cached nnU-Net **v2.6.4** tag at commit
+`273d6147f2d71bafc27a5e1c6fcab9f59ceba7d0`; no real checkpoints or CUDA execution
+were used in that review. No global path or
+nnU-Net environment configuration is changed. V3 uses the supported sequential
+file-prediction API with explicit one-channel input lists and truncated output
+filename lists. In v2.6.4, passing directories would invoke a multiprocessing
+pool during filename discovery even from the sequential method; explicit lists
+avoid that path. This retains V2 sliding
+window settings (step 0.5, Gaussian weighting, mirroring, CUDA device 0).
+
+V2 has no size threshold: with splitting enabled, it partitions at `Z // 2` and
+concatenates first-half then second-half predictions without overlap or label
+reconciliation. V3 preserves that algorithm for `Z >= 2`, with the odd extra
+slice in the second part. A one-slice volume is processed unsplit to avoid V2's
+empty-part failure. Each part is submitted independently. Its affine is
+`original_affine @ voxel_translation(0, 0, z_start)`; V2's second-half origin
+adjustment used only the world-Z component. No external normalization,
+downsampling, reorientation, or image-space resampling is introduced.
+
+Predictions must match their part's input grid, contain nonnegative discrete
+labels from model 802's `dataset.json`, and merge to the original dimensions.
+Background-only split parts are allowed. An entirely empty automatic result or
+supplied segmentation is rejected, as is binary-mask conversion from an empty
+segmentation: no spinal crop or anatomical conditioning region could be derived
+for downstream lesion preparation, so an empty result is not treated as success.
+Full-grid outputs restore the original reference affine, units, and coded
+qform/sform transforms. Supplied masks retain their discrete label values
+(including values above 255); negative/probabilistic/nonfinite masks are rejected
+for spine execution. Their source is never modified. In supplied-mask mode,
+ConvCT remains optional; when present it must match the segmentation within the
+existing 0.001 mm contract and is the output reference. Otherwise the supplied
+mask is the spine-only reference. Compatible supplied voxel labels are copied
+by index onto the chosen reference grid without resampling; the original source
+is also preserved byte-for-byte.
+
+Completed runs are published atomically in unique directories:
+
+```text
+<output_dir>/run-<unique-id>/
+  run.json
+  spine/
+    spine_labelled.nii.gz
+    spine_binary.nii.gz
+    spine_supplied.nii.gz    # supplied mode only, byte-identical source copy
+```
+
+`run.json` records completion status/time, automatic/supplied provenance, source
+filenames (without absolute patient paths), requested/effective split and any
+one-slice fallback, model ID/verification/artifact provenance/folds/checkpoint,
+reference/output geometries, and relative output paths. The binary mask contains
+1 for every nonzero spine label. It is available for later lesion conditioning;
+no lesion inference is performed. All temporary inputs and predictions are
+run-specific and cleaned on failure. A failure in either split publishes no
+completed run and preserves existing results. An empty output root may remain
+after a failed execution. No success is reported until the complete run is
+published using the existing no-clobber directory mechanism.
+Expected publication failures are reported without a traceback using exit code
+5, including native filesystem errors raised by the shared installation helper;
+they are not misclassified as model-resolution errors (code 4).
 
 `benchmark_model_installation.ModelInstaller(cache_dir).resolve(id)` also provides
 the installation API; `resolve_plan(plan)` resolves only the plan's required
@@ -132,18 +222,23 @@ future inference must verify the published model's actual output-label conventio
 before reconstruction. No external normalization or
 morphology is applied. These utilities do not perform inference.
 
-Reference selection is ConvCT for automatic spine mode, the first required
+For lesion preprocessing, reference selection is ConvCT for automatic spine mode, the first required
 reconstruction for supplied-mask lesion mode, or the mask for supplied-mask
 spine-only mode. The CLI validates these grids without producing predictions.
-Spine split/merge and all nnU-Net inference remain
-for future phases. Published plans remain unchanged. Exact benchmark
+Lesion-model inference remains for Phase 4B. Published plans remain unchanged. Exact benchmark
 training crop padding/affine handling remains unverified; five-voxel padding
 preserves the existing pipeline's principle. Legacy V1/V2 utilities are unchanged.
 Managed models from Zenodo records 18598645 (spine 802, `fold_all`) and 19708429
 (lesions 700–718) will remain isolated from legacy installations.
 
-Run all offline registry, preprocessing, and mock-archive installation tests with
+Run all offline registry, preprocessing, mock-archive installation, and fake-predictor spine tests with
 `python -B -m unittest discover -s tests -v`.
+An optional source-level contract test checks signatures and filename mapping
+against exactly nnU-Net 2.6.4 without importing its inference dependencies. It
+uses an installed 2.6.4 distribution or a cached checkout specified by
+`NNUNET_V264_SOURCE`; otherwise it skips cleanly. No test installs packages or
+loads real checkpoints. Synthetic/fake-predictor tests validate orchestration and
+output safety, not real-model segmentation performance or CUDA compatibility.
 
 ![Graphical Abstract](graphical_abstract.png "Overview of the dataset creation pipeline and data structure.")
 

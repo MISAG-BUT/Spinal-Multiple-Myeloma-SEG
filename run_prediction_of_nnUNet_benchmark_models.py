@@ -1,4 +1,4 @@
-"""V3 Phase 3: validate inputs; optionally install models. No inference yet.
+"""V3 Phase 4A: spine-only execution; lesion inference remains unimplemented.
 
 Later stages must binarize nonzero spine labels before a shared five-voxel crop,
 translate cropped affines, retain published normalization/plans, and reconstruct
@@ -32,11 +32,12 @@ class ExecutionPlan:
     split: Optional[bool]
     modality_paths: Tuple[Tuple[str, Path], ...]
     install_models: bool = False
+    validate_only: bool = False
 
 
 def build_parser():
     parser = argparse.ArgumentParser(
-        description="V3 benchmark prediction (Phase 3: optional model installation; no inference)",
+        description="V3 benchmark prediction (Phase 4A: spine-only inference)",
         allow_abbrev=False,
     )
     parser.add_argument("--input_dir", required=True, type=Path)
@@ -48,7 +49,9 @@ def build_parser():
     parser.add_argument("--spine_model_dir", type=Path)
     parser.add_argument("--cache_dir", type=Path)
     parser.add_argument("--install_models", action="store_true",
-                        help="After input validation, resolve/install required V3 models; inference remains unimplemented")
+                        help="Authorize missing-model installation; without this flag no downloads are allowed")
+    parser.add_argument("--validate_only", action="store_true",
+                        help="Validate inputs and print the plan without installation, inference, or output creation")
     # Suppression distinguishes explicit input from the implicit V2 default.
     parser.add_argument("--split", type=lambda x: str(x).lower() == "true",
                         default=argparse.SUPPRESS,
@@ -59,6 +62,8 @@ def build_parser():
 def validate_arguments(args):
     """Validate paths only, without reading NIfTI content or creating directories."""
     supplied = args.spine_segmentation is not None
+    if args.validate_only and args.install_models:
+        raise ValueError("--validate_only cannot be combined with --install_models")
     if supplied and args.spine_model_dir is not None:
         raise ValueError("--spine_model_dir cannot be combined with --spine_segmentation")
     if supplied and hasattr(args, "split"):
@@ -100,6 +105,7 @@ def validate_arguments(args):
         None if supplied else getattr(args, "split", True),
         tuple((name, entries[MODALITY_FILENAMES[name]]) for name in required),
         args.install_models,
+        args.validate_only,
     )
 
 
@@ -117,11 +123,14 @@ def cli(argv=None):
     plan = parse_arguments(argv)
     try:
         from benchmark_nifti import validate_plan_inputs
-        validate_plan_inputs(plan)
+        validated_inputs = validate_plan_inputs(plan)
+        if plan.lesion_model is None:
+            from benchmark_spine_inference import validate_spine_inputs
+            validated_inputs = validate_spine_inputs(plan, validated_inputs)
     except (ValueError, OSError) as error:
         print("V3 input validation failed: {}".format(error), file=sys.stderr)
         return 2
-    print("V3 Phase 3 execution plan (NIfTI content and geometry validated)")
+    print("V3 Phase 4A execution plan (NIfTI content and geometry validated)")
     print("Input: {}\nOutput destination (not created): {}".format(plan.input_dir, plan.output_dir))
     if plan.spine_segmentation is None:
         print("Automatic spine segmentation: model 802, fold_all; split={}".format(plan.split))
@@ -136,6 +145,25 @@ def cli(argv=None):
     print("Required reconstructions: " + (", ".join(name for name, _ in plan.modality_paths) or "none"))
     from benchmark_model_installation import default_cache_dir
     print("Cache: {}".format(plan.cache_dir or default_cache_dir()))
+    if plan.validate_only:
+        print("Validation only: no installation, inference, or output creation was attempted.")
+        return 3
+    if plan.lesion_model is None:
+        from benchmark_spine_inference import run_spine_only, SpineInferenceError
+        from benchmark_model_installation import InstallationError
+        try:
+            result = run_spine_only(plan, validated_inputs)
+        except InstallationError as error:
+            print("V3 model resolution failed: {}".format(error), file=sys.stderr)
+            return 4
+        except (SpineInferenceError, ValueError, OSError) as error:
+            print("V3 spine execution failed: {}".format(error), file=sys.stderr)
+            if isinstance(error, FileExistsError):
+                print("Output publication collided with an existing destination, which was preserved. Retry to obtain a new run ID or choose another output directory.", file=sys.stderr)
+            return 5
+        print("Spine segmentation completed: {}".format(result / "spine" / "spine_labelled.nii.gz"))
+        print("Run manifest: {}".format(result / "run.json"))
+        return 0
     if plan.install_models:
         from benchmark_model_installation import ModelInstaller, InstallationError
         try:
@@ -146,7 +174,7 @@ def cli(argv=None):
         except (InstallationError, OSError) as error:
             print("V3 model installation failed: {}".format(error), file=sys.stderr)
             return 4
-    print("Inference is not yet implemented. No predictions or patient output directories were created."
+    print("Lesion inference is not yet implemented (Phase 4B). No predictions or patient output directories were created."
           + (" Model resolution was requested." if plan.install_models else " No downloads were attempted."), file=sys.stderr)
     return 3
 
