@@ -16,22 +16,27 @@ classifiers = [
     "Intended Audience :: Science/Research",
     "License :: OSI Approved :: MIT License",
     "Programming Language :: Python :: 3",
-    "Programming Language :: Python :: 3.8",
-    "Programming Language :: Python :: 3.9",
-    "Programming Language :: Python :: 3.10",
-    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
     "Topic :: Scientific/Engineering :: Medical Science Apps.",
 ]
-requires-python = ">=3.8"
+requires-python = ">=3.12,<3.13"
 dependencies = [
-    "nibabel",
-    "numpy",
-    "torch",
-    "torchvision",
-    "pydicom",
-    "napari[all]",
-    "SimpleITK",
+    "torch==2.10.0+cu130",
+    "torchvision==0.25.0+cu130",
+    "numpy==2.3.5",
+    "nibabel==5.3.3",
+    "SimpleITK==2.5.3",
+    "scipy==1.17.0",
+    "batchgenerators==0.25.1",
+    "batchgeneratorsv2==0.3.0",
+    "acvl-utils==0.2.5",
+    "dynamic-network-architectures==0.4.3",
+    "nnunetv2 @ git+https://github.com/MIC-DKFZ/nnUNet.git@273d6147f2d71bafc27a5e1c6fcab9f59ceba7d0",
+    "pydicom==3.0.1",
 ]
+
+[project.optional-dependencies]
+gui = ["napari[all]==0.6.6"]
 
 [project.scripts]
 spinal-db-viewer = "spinal_mm_cli:database_viewer"
@@ -54,3 +59,15 @@ py-modules = [
     "spinal_mm_cli",
     "config",
 ]
+
+[tool.uv]
+environments = ["sys_platform == 'linux' and platform_machine == 'x86_64'"]
+
+[tool.uv.sources]
+torch = { index = "pytorch-cu130" }
+torchvision = { index = "pytorch-cu130" }
+
+[[tool.uv.index]]
+name = "pytorch-cu130"
+url = "https://download.pytorch.org/whl/cu130"
+explicit = true

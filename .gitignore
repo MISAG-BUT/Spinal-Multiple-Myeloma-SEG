@@ -9,3 +9,15 @@
 /nnUNet
 /DATA_output
 /venv_run_nnUNet_prediction
+/.venv/
+/.venv-pip/
+/.uv-cache/
+/build/
+/dist/
+/*.egg-info/
+/Model_cache/
+/V3_runs/
+/test-output/
+*.nii
+*.nii.gz
+*.dcm

@@ -469,163 +469,104 @@ A more detailed description of the models, training data, and processing pipelin
 ## Usage
 ### Installation
 
-#### Environment Setup for nnUNet Prediction (Python 3.13)
-This guide explains how to set up the environment for running predictions with [nnUNet](https://github.com/MIC-DKFZ/nnUNet) on the [Spinal-Multiple-Myeloma-SEG](https://github.com/MISAG-BUT/Spinal-Multiple-Myeloma-SEG) project.
-Check out the official [nnUNet installation instructions](https://github.com/MIC-DKFZ/nnUNet/blob/master/documentation/installation_instructions.md)
+The reproducible profile is tested on **Linux x86-64 with Python 3.12, an
+NVIDIA CUDA 13.0-compatible driver and an RTX 5080**. It installs the three
+prediction launchers and uses the exact nnU-Net v2.6.4 Git revision recorded in
+`pyproject.toml`. Git and network access are needed for the initial dependency
+installation. The nnU-Net source is installed as a Python dependency.
 
-**Note:** This pipeline has been tested on both Linux and Windows systems with GPUs:  
+The checked-in lock and pip export target this Linux profile. Windows, macOS,
+other Python versions and alternative Torch builds require their own dependency
+resolution and validation. Keep any existing legacy environments for those
+configurations.
 
-- **Linux:**  
-  - GPU: Nvidia Titan Xp, 12 GB GDDR5  
-  - CPU: Intel Core i9-12900KF, 8+8/24 cores/threads, 2.4/3.2 GHz  
-  - RAM: 64 GB DDR5  
-  - Storage: 1 TB SSD (system), 4 TB HDD RAID5 (data)  
-  - OS: Ubuntu 24.04  
+#### Recommended installation with uv
 
-- **Windows:**  
-  - GPU: EVGA GeForce RTX 3090, 24 GB GDDR6  
-  - CPU: Intel Core i9-10900KF, 10/20 cores/threads, 3.7 GHz  
-  - RAM: 64 GB  
-  - Storage: 2 TB SSD M.2 (system)  
-  - OS: Windows 10  
-
-> ⚠ **Important:** The script defaults to Linux-style multiprocessing. On a clean Windows setup, nnU-Net batch prediction may fail due to multiprocessing issues.  
-> If segmentation fails, use **Variant 2** in the `run_nnunet_inference` function in `utils.py`, which runs predictions sequentially without multiprocessing. This is slower but safe on Windows.
-
----
-#### Step 1: Install Python and Clone Repository
-First, download and install Python 3.13.x from [python.org](https://www.python.org/downloads/). We used Python 3.13.5.  
-During installation, make sure to check **"Add Python to PATH"**.  
-
-
-Create a virtual environment inside the project folder. Replace <path-to-your-python-executable> with the path to Python 3.13 on your system:
-```bash
-<path-to-your-python-executable> -m venv venv_run_nnUNet_prediction
-```
-
-Examples:
-- Windows
-```bash
-C:\Users\<username>\AppData\Local\Programs\Python\Python313\python.exe -m venv venv_run_nnUNet_prediction
-```
-- Linux/macOS
-```bash
-python3.13 -m venv venv_run_nnUNet_prediction
-```
-
-Activate the environment:
-- Windows
-```bash
-venv_run_nnUNet_prediction\Scripts\activate
-```
-- Linux/macOS
-```bash
-source venv_run_nnUNet_prediction/bin/activate
-```
-
-When activated, your prompt should show (venv_run_nnUNet_prediction).
-
-#### Step 2: Install Core Dependencies
-Install required packages starting with PyTorch. For CUDA 12.6 run:
-```bash
-pip install torch torchvision --index-url https://download.pytorch.org/whl/cu126
-```
-Clone the nnUNet repository, move into it, and install in editable mode:
-```bash
-git clone https://github.com/MIC-DKFZ/nnUNet.git
-cd nnUNet
-pip install -e .
-cd ..
-```
-
-Clone the project repository and move into the project folder:
+From the repository root, with Python 3.12 and uv available:
 
 ```bash
-git clone https://github.com/MISAG-BUT/Spinal-Multiple-Myeloma-SEG.git
-cd Spinal-Multiple-Myeloma-SEG
-pip install -e .
-cd ..
+uv sync
+uv run spinal-run-nnunet-TCIA --help
+uv run spinal-run-nnunet-new-prediction --help
+uv run spinal-run-nnunet-benchmark-prediction --help
 ```
 
-#### Step 3: Additional / Optional Packages (napari / Qt)
-
-The GUI viewer relies on `napari`, which requires a working Qt backend.  
-Depending on your operating system, additional system libraries may be needed.
-
-> 💡 **Tip:** If `napari` fails to start (Qt errors, missing plugins, or XCB issues), install the OS-specific dependencies below.
-
-##### Linux (tested on Ubuntu)
-
-On Linux, you may need extra Qt/XCB system libraries:
+Use `uv sync --locked` to require the checked-in resolution. Torch and
+torchvision use the explicit official CUDA 13.0 index. The local environment is
+`.venv`. For the optional DICOM viewer and its Qt dependencies:
 
 ```bash
-sudo apt install \
-  libxcb-xinerama0 \
-  libxkbcommon-x11-0 \
-  libxcb-cursor0 \
-  libxcb-icccm4 \
-  libxcb-keysyms1 \
-  libxcb-randr0 \
-  libxcb-render-util0 \
-  libxcb-xfixes0 \
-  libxcb-shape0 \
-  libxcb-sync1 \
-  libxcb-xkb1
+uv sync --extra gui
+uv run --extra gui spinal-db-viewer --help
 ```
 
-Then install the Python packages:
+An interactive viewer session also needs a working display and system Qt
+libraries for the selected backend. Any external NIfTI viewer can overlay the
+final V3 masks on the original reference image.
+
+#### Alternative installation with pip
+
+Use a fresh Python 3.12 environment from the repository root on Linux x86-64:
 
 ```bash
-# Napari viewer for GUI visualization
-pip install napari
-
-# Full napari installation with optional plugins (recommended)
-pip install -U 'napari[all]'
+python3.12 -m venv .venv-pip
+source .venv-pip/bin/activate
+python -m pip install --no-deps --index-url https://download.pytorch.org/whl/cu130 \
+  torch==2.10.0+cu130 torchvision==0.25.0+cu130
+python -m pip install --extra-index-url https://download.pytorch.org/whl/cu130 -r requirements.txt
+python -m pip install --no-deps -e .
+python -m pip check
+spinal-run-nnunet-TCIA --help
+spinal-run-nnunet-new-prediction --help
+spinal-run-nnunet-benchmark-prediction --help
 ```
 
-##### Windows
+The final install registers the launchers and the installed project reads the
+same dependencies from `pyproject.toml`. For the optional viewer in the pip
+environment, run
+`python -m pip install --extra-index-url https://download.pytorch.org/whl/cu130 -c requirements.txt -e '.[gui]'`.
 
-On Windows, installing the full napari package with Qt dependencies is usually sufficient:
+`pyproject.toml` defines the dependencies, `uv.lock` records their resolution,
+and `requirements.txt` is a generated export of the base environment. To
+refresh the export after an intentional lock update:
 
 ```bash
-pip install -U 'napari[all]'
+uv export --locked --format requirements-txt --no-hashes --no-emit-project -o requirements.txt
 ```
 
-If you experience GUI issues, make sure your environment uses a compatible Qt backend (PyQt5 is installed automatically via `napari[all]`).
+#### V3 quick start
 
----
+Put `ConvCT.nii.gz` and `VMI_40.nii.gz` in a per-case input folder for model 710.
+Use the original NIfTI files with their original orientation. If needed, create
+links or copies with these names in a separate input folder. V3 reorients each
+required image internally and publishes masks in the original reference grid.
+Choose model IDs 700–718 according to the reconstructions listed in the
+[V3 model table](#v3-benchmark-prediction--phase-4b-end-to-end-spine-and-lesions).
 
-## Full Setup Summary
-For convenience, a full setup summary:
 ```bash
-<path-to-your-python-executable> -m venv venv_run_nnUNet_prediction
-# Activate the environment
-# Windows:
-venv_run_nnUNet_prediction\Scripts\activate
-# Linux/macOS:
-source venv_run_nnUNet_prediction/bin/activate
+# Automatic spine (802) and lesions (710), authorizing model installation if missing.
+uv run spinal-run-nnunet-benchmark-prediction \
+  --input_dir /data/case --output_dir /data/results \
+  --lesion_model 710 --split True --install_models
 
-pip install torch torchvision --index-url https://download.pytorch.org/whl/cu126
-git clone https://github.com/MIC-DKFZ/nnUNet.git
-cd nnUNet
-pip install -e .
-cd ..
-git clone https://github.com/MISAG-BUT/Spinal-Multiple-Myeloma-SEG.git
-cd Spinal-Multiple-Myeloma-SEG
-pip install -e .
-cd ..
+# Spine only, reusing an installed model.
+uv run spinal-run-nnunet-benchmark-prediction \
+  --input_dir /data/case --output_dir /data/results --skip_lesion_segmentation
 
-# Optional / additional packages
-pip install pydicom napari
-pip install -U 'napari[all]'
+# Lesions from VMI_40 and an existing spine mask.
+uv run spinal-run-nnunet-benchmark-prediction \
+  --input_dir /data/case --output_dir /data/results \
+  --lesion_model 710 --spine_segmentation /data/masks/spine.nii.gz
 ```
 
-Always replace <path-to-your-python-executable> with the correct path on your system. For different CUDA versions or CPU-only setups, check the [PyTorch installation guide](https://pytorch.org/get-started/locally/).
-
----
+Use `--cache_dir /data/models` to share a V3 model cache across runs. Omit
+`--install_models` for offline reuse of verified cached models. Add
+`--validate_only` to check inputs and alignment without prediction. Successful
+validation-only execution exits with code 3. Each successful prediction publishes
+a new `run-…` directory containing the final masks and `run.json`.
 
 ## Path Configuration
-Before running the project, you need to edit the `config.py` file and set the correct paths to your data and output directories according to your environment.
+V1, V2 and the viewer accept explicit CLI paths or defaults from `config.py`. The installed nnU-Net dependency supplies imports even when the legacy `NNUNET_REPO_PATH` points to a missing checkout. Point the legacy prediction commands at the appropriate separately installed legacy model directory. V3 uses its command-line paths and model cache.
 
 ---
 
