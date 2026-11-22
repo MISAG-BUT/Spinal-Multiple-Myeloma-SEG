@@ -53,7 +53,7 @@ def _check_affine(affine, label):
         raise ValueError("{}: affine is not invertible".format(label))
 
 
-def validate_image(image, label="image"):
+def validate_image(image, label="image", *, data=None):
     """Validate an in-memory NIfTI and return it without modifying it."""
     try:
         if not isinstance(image, (nib.Nifti1Image, nib.Nifti2Image)):
@@ -67,8 +67,9 @@ def validate_image(image, label="image"):
         if not np.allclose(spacing, nib.affines.voxel_sizes(image.affine), rtol=0, atol=GEOMETRY_TOLERANCE_MM / _MM_SCALE.get(image.header.get_xyzt_units()[0], 1)):
             raise ValueError("Header voxel spacing conflicts with affine spacing")
         affine_mm = _affine_mm(image)
-        if nib.aff2axcodes(image.affine) != ("R", "A", "S"):
-            raise ValueError("Require RAS orientation; got {}. Prepare aligned RAS inputs externally; V3 does not reorient".format(nib.aff2axcodes(image.affine)))
+        orientation = nib.io_orientation(image.affine)
+        if not np.isfinite(orientation).all() or set(orientation[:, 0]) != {0, 1, 2}:
+            raise ValueError("Affine must describe three distinct voxel axes")
         qform, qcode = image.get_qform(coded=True)
         sform, scode = image.get_sform(coded=True)
         for transform, code in ((qform, qcode), (sform, scode)):
@@ -78,8 +79,8 @@ def validate_image(image, label="image"):
                     raise ValueError("Coded qform/sform conflicts with effective affine")
         if qcode and scode and _distance(_affine_mm(image, qform), _affine_mm(image, sform), image.shape) > GEOMETRY_TOLERANCE_MM:
             raise ValueError("Materially conflicting qform and sform transforms")
-        data = np.asanyarray(image.dataobj)
-        if data.dtype.kind not in "biuf" or not np.isfinite(data).all():
+        data = np.asanyarray(image.dataobj) if data is None else data
+        if data.dtype.kind not in "biuf" or (data.dtype.kind == "f" and not np.isfinite(data).all()):
             raise ValueError("Voxel values must be real and finite (no NaN or infinity)")
     except (ValueError, OSError, nib.spatialimages.HeaderDataError) as error:
         raise ValueError("{}: {}".format(label, error)) from error
@@ -87,7 +88,7 @@ def validate_image(image, label="image"):
 
 
 def load_nifti(path):
-    """Load and fully validate a 3D RAS NIfTI, including scaled voxel values."""
+    """Load and fully validate a 3D NIfTI, including scaled voxel values."""
     try:
         return validate_image(nib.load(str(path)), str(path))
     except Exception as error:
@@ -100,6 +101,8 @@ def compare_geometry(reference, image, label="image"):
     validate_image(image, label)
     if reference.shape != image.shape:
         raise ValueError("{}: shape {} differs from reference {}; supply aligned inputs".format(label, image.shape, reference.shape))
+    if nib.aff2axcodes(reference.affine) != nib.aff2axcodes(image.affine):
+        raise ValueError("{}: orientation differs from reference grid".format(label))
     first, second = _affine_mm(reference), _affine_mm(image)
     if not np.allclose(nib.affines.voxel_sizes(first), nib.affines.voxel_sizes(second), rtol=0, atol=GEOMETRY_TOLERANCE_MM):
         raise ValueError("{}: voxel spacing differs from reference; no resampling is performed".format(label))
@@ -335,16 +338,124 @@ def save_nifti_no_clobber(image, output_path):
         temporary.unlink(missing_ok=True)
 
 
+def image_geometry(image):
+    qform, qcode = image.get_qform(coded=True)
+    sform, scode = image.get_sform(coded=True)
+    return {
+        "shape": list(image.shape), "affine": image.affine.tolist(),
+        "spacing": list(map(float, image.header.get_zooms())),
+        "spatial_units": image.header.get_xyzt_units()[0],
+        "orientation": list(nib.aff2axcodes(image.affine)),
+        "qform": qform.tolist() if qform is not None else None, "qform_code": int(qcode),
+        "sform": sform.tolist() if sform is not None else None, "sform_code": int(scode),
+    }
+
+
+_RAS = nib.orientations.axcodes2ornt(("R", "A", "S"))
+
+
+@dataclass(frozen=True)
+class OrientedInput:
+    original: object
+    ras: object
+    to_ras: np.ndarray
+    from_ras: np.ndarray
+
+    def restore(self, image):
+        """Return prediction voxels to the original reference grid."""
+        if np.array_equal(self.to_ras, _RAS):
+            return image
+        data = nib.orientations.apply_orientation(np.asanyarray(image.dataobj), self.from_ras)
+        header = self.original.header.copy()
+        header.set_data_dtype(data.dtype)
+        header.set_slope_inter(None, None)
+        return self.original.__class__(data, self.original.affine, header)
+
+    def provenance(self):
+        return {
+            "original_geometry": image_geometry(self.original),
+            "ras_geometry": image_geometry(self.ras),
+            "to_ras": self.to_ras.astype(int).tolist(),
+        }
+
+
+def orient_input(image, label="image"):
+    """Decode scaling once, and move axes using views of the decoded values."""
+    data = np.asanyarray(image.dataobj)
+    validate_image(image, label, data=data)
+    orientation = nib.io_orientation(image.affine)
+    forward = nib.orientations.ornt_transform(orientation, _RAS)
+    inverse = nib.orientations.ornt_transform(_RAS, orientation)
+    if np.array_equal(forward, _RAS):
+        ras = image if isinstance(image.dataobj, np.ndarray) else image_on_reference_grid(data, image)
+    else:
+        mapping = nib.orientations.inv_ornt_aff(forward, image.shape)
+        values = nib.orientations.apply_orientation(data, forward)
+        affine = image.affine @ mapping
+        header = image.header.copy()
+        header.set_data_dtype(values.dtype)
+        header.set_slope_inter(None, None)
+        ras = image.__class__(values, affine, header)
+        qform, qcode = image.get_qform(coded=True)
+        sform, scode = image.get_sform(coded=True)
+        ras.set_qform(qform @ mapping if qcode else None, int(qcode))
+        ras.set_sform(sform @ mapping if scode else affine, int(scode) if (scode or qcode) else 2)
+        validate_image(ras, label)
+    return OrientedInput(image, ras, forward, inverse)
+
+
+@dataclass(frozen=True)
+class ValidatedInputs:
+    reconstructions: dict
+    segmentation: object
+    oriented: dict
+    reference_name: str
+
+    @property
+    def reference(self):
+        return self.oriented[self.reference_name]
+
+    def __iter__(self):
+        return iter((self.reconstructions, self.segmentation, self.reference.ras))
+
+    def __getitem__(self, index):
+        return tuple(self)[index]
+
+    def orientation_provenance(self):
+        return {
+            "reference_input": self.reference_name,
+            "inputs": {name: source.provenance() for name, source in self.oriented.items()},
+            "output_from_ras": self.reference.from_ras.astype(int).tolist(),
+            "transform_convention": "NiBabel orientation rows: destination axis and direction for each source axis",
+            "split_grid": "reference_ras",
+        }
+
+
 def validate_plan_inputs(plan):
-    """Load required CLI inputs and validate them without writing intermediates."""
-    reconstructions = {name: load_nifti(path) for name, path in plan.modality_paths}
-    segmentation = load_nifti(plan.spine_segmentation) if plan.spine_segmentation is not None else None
-    if segmentation is not None:
+    """Load, orient and align required inputs without writing intermediates."""
+    paths = dict(plan.modality_paths)
+    if plan.spine_segmentation is not None:
+        paths["spine_segmentation"] = plan.spine_segmentation
+        if plan.lesion_model is None:
+            convct = plan.input_dir / "ConvCT.nii.gz"
+            if any(path.name == convct.name for path in plan.input_dir.iterdir()):
+                paths["ConvCT"] = convct
+    oriented = {}
+    for name, path in paths.items():
+        try:
+            oriented[name] = orient_input(nib.load(str(path)), name)
+        except (OSError, EOFError, ValueError, nib.filebasedimages.ImageFileError,
+                nib.spatialimages.HeaderDataError) as error:
+            raise ValueError("Cannot read valid NIfTI {}: {}".format(path, error)) from error
+    supplied = oriented.get("spine_segmentation")
+    segmentation = supplied.ras if supplied is not None else None
+    reconstructions = {name: source.ras for name, source in oriented.items() if name != "spine_segmentation"}
+    if supplied is not None:
         validate_spine_segmentation(segmentation)
-    reference = (reconstructions["ConvCT"] if segmentation is None else
-                 reconstructions[plan.lesion_model.required_modalities[0]] if plan.lesion_model else segmentation)
-    for name, image in reconstructions.items():
-        compare_geometry(reference, image, name)
-    if segmentation is not None:
-        compare_geometry(reference, segmentation, "spine segmentation")
-    return reconstructions, segmentation, reference
+    reference_name = (plan.lesion_model.required_modalities[0] if supplied and plan.lesion_model else
+                      "ConvCT" if "ConvCT" in oriented else "spine_segmentation")
+    reference = oriented[reference_name].ras
+    for name, source in oriented.items():
+        if name != reference_name:
+            compare_geometry(reference, source.ras, name)
+    return ValidatedInputs(reconstructions, segmentation, oriented, reference_name)

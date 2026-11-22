@@ -127,13 +127,15 @@ def cli(argv=None):
         if plan.lesion_model is None:
             from benchmark_spine_inference import validate_spine_inputs
             validated_inputs = validate_spine_inputs(plan, validated_inputs)
-        elif validated_inputs[1] is not None:
-            from benchmark_spine_inference import validate_labels
-            validate_labels(validated_inputs[1])
+        else:
+            _, segmentation, _ = validated_inputs
+            if segmentation is not None:
+                from benchmark_spine_inference import validate_labels
+                validate_labels(segmentation)
     except (ValueError, OSError) as error:
         print("V3 input validation failed: {}".format(error), file=sys.stderr)
         return 2
-    print("V3 Phase 4B execution plan (NIfTI content and geometry validated)")
+    print("V3 Phase 4B execution plan (NIfTI content validated and inputs aligned in RAS)")
     print("Input: {}\nOutput destination (not created): {}".format(plan.input_dir, plan.output_dir))
     if plan.spine_segmentation is None:
         print("Automatic spine segmentation: model 802, fold_all; split={}".format(plan.split))

@@ -18,7 +18,7 @@ from benchmark_model_registry import SPINE_MODEL
 from benchmark_model_installation import ModelInstaller, InstallationError, _publish_directory
 from benchmark_nifti import (
     Crop, _new_image, binary_spine_mask, compare_geometry, crop_image,
-    load_nifti, save_nifti_no_clobber, validate_image, image_on_reference_grid,
+    load_nifti, save_nifti_no_clobber, validate_image, image_on_reference_grid, image_geometry,
     validate_label_values,
 )
 
@@ -138,30 +138,12 @@ def infer_spine(reference, resolved_model, work_dir, *, split=True, predictor_fa
         raise SpineInferenceError("Model-802 spine inference failed: {}".format(error)) from error
 
 
-def _geometry(image):
-    return {"shape": list(image.shape), "affine": image.affine.tolist(),
-            "spacing": [float(value) for value in image.header.get_zooms()],
-            "spatial_units": image.header.get_xyzt_units()[0],
-            "orientation": list(nib.aff2axcodes(image.affine)),
-            "qform_code": int(image.header["qform_code"]),
-            "sform_code": int(image.header["sform_code"])}
-
-
 def validate_spine_inputs(plan, validated_inputs):
-    """Extend Phase 2 validation for spine execution, including optional ConvCT."""
-    reconstructions, segmentation, reference = validated_inputs
-    reconstructions = dict(reconstructions)
+    """Apply execution label rules in addition to shared input validation."""
+    _, segmentation, _ = validated_inputs
     if segmentation is not None:
         validate_labels(segmentation)
-        exact_names = {path.name for path in plan.input_dir.iterdir()}
-        if "ConvCT.nii.gz" in exact_names:
-            if "ConvCT" not in reconstructions:
-                reconstructions["ConvCT"] = load_nifti(plan.input_dir / "ConvCT.nii.gz")
-            reference = reconstructions["ConvCT"]
-        compare_geometry(reference, segmentation, "supplied spine segmentation")
-    else:
-        validate_image(reference, "ConvCT")
-    return reconstructions, segmentation, reference
+    return validated_inputs
 
 
 def run_spine_only(plan, validated_inputs, *, installer=None, predictor_factory=None):
@@ -196,10 +178,11 @@ def run_spine_only(plan, validated_inputs, *, installer=None, predictor_factory=
         compare_geometry(reference, labelled, "final spine segmentation")
         spine_dir = stage / "spine"
         spine_dir.mkdir()
-        save_nifti_no_clobber(labelled, spine_dir / "spine_labelled.nii.gz")
+        published_labelled = validated_inputs.reference.restore(labelled)
+        save_nifti_no_clobber(published_labelled, spine_dir / "spine_labelled.nii.gz")
         binary = binary_spine_mask(labelled)
         binary = _label_image(np.asanyarray(binary.dataobj), reference)
-        save_nifti_no_clobber(binary, spine_dir / "spine_binary.nii.gz")
+        save_nifti_no_clobber(validated_inputs.reference.restore(binary), spine_dir / "spine_binary.nii.gz")
         if segmentation is not None:
             shutil.copyfile(str(plan.spine_segmentation), str(spine_dir / "spine_supplied.nii.gz"))
         # Work directory is owned by this run, under its unique staging directory.
@@ -207,7 +190,7 @@ def run_spine_only(plan, validated_inputs, *, installer=None, predictor_factory=
             raise SpineInferenceError("Temporary work directory escaped its run directory")
         shutil.rmtree(work)
         manifest = {
-            "schema_version": 1, "phase": "4A", "status": "completed",
+            "schema_version": 3, "phase": "4A", "status": "completed",
             "completed_at": datetime.now(timezone.utc).isoformat(),
             "spine_source": "automatic" if resolved else "supplied",
             "source_convct": "ConvCT.nii.gz" if "ConvCT" in reconstructions else None,
@@ -218,7 +201,9 @@ def run_spine_only(plan, validated_inputs, *, installer=None, predictor_factory=
                       "artifact": resolved.provenance.get("artifact"),
                       "folds": list(SPINE_MODEL.folds), "checkpoint": SPINE_MODEL.checkpoint_filename,
                       "trainer_directory": SPINE_MODEL.trainer_directory} if resolved else None,
-            "reference_geometry": _geometry(reference), "output_geometry": _geometry(labelled),
+            "reference_geometry": image_geometry(validated_inputs.reference.original),
+            "output_geometry": image_geometry(published_labelled),
+            "orientation": validated_inputs.orientation_provenance(),
             "labelled_output": "spine/spine_labelled.nii.gz",
             "binary_output": "spine/spine_binary.nii.gz", "lesion_inference": "not_requested",
         }

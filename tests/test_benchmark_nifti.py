@@ -3,6 +3,7 @@
 import contextlib
 import hashlib
 import io
+from itertools import permutations, product
 from pathlib import Path
 import tempfile
 import unittest
@@ -12,7 +13,7 @@ import nibabel as nib
 import numpy as np
 
 from benchmark_nifti import (
-    Crop, binary_spine_mask, compare_geometry, crop_image, load_nifti,
+    orient_input, Crop, binary_spine_mask, compare_geometry, crop_image, load_nifti,
     padded_bounding_box, prepare_lesion_channels, reconstruct_lesions,
     save_prepared_channels, validate_image, validate_plan_inputs,
     validate_spine_segmentation, save_nifti_no_clobber,
@@ -41,6 +42,61 @@ def spine():
     return image(data)
 
 
+class OrientationTests(unittest.TestCase):
+    def test_all_axis_orders_and_flips_preserve_world_locations_and_values(self):
+        values = np.arange(60, dtype=np.int16).reshape(3, 4, 5)
+        angle = 0.21
+        rotation = np.array([[np.cos(angle), -np.sin(angle), 0],
+                             [np.sin(angle), np.cos(angle), 0], [0, 0, 1]])
+        affine = image().affine.copy()
+        affine[:3, :3] = rotation @ affine[:3, :3]
+        ras = image(values, affine)
+        self.assertIs(orient_input(ras).ras, ras)
+        coords = np.indices(values.shape).reshape(3, -1).T
+        expected_world = nib.affines.apply_affine(affine, coords)
+        for axes in permutations(range(3)):
+            for directions in product((-1, 1), repeat=3):
+                with self.subTest(axes=axes, directions=directions):
+                    transform = np.column_stack((axes, directions))
+                    original = ras.as_reoriented(transform)
+                    oriented = orient_input(original)
+                    np.testing.assert_array_equal(oriented.ras.dataobj, values)
+                    np.testing.assert_allclose(
+                        nib.affines.apply_affine(oriented.ras.affine, coords), expected_world, atol=1e-12)
+                    mapping = nib.orientations.inv_ornt_aff(oriented.to_ras, original.shape)
+                    old_coords = nib.affines.apply_affine(mapping, coords).astype(int)
+                    np.testing.assert_array_equal(original.dataobj[tuple(old_coords.T)], values.ravel())
+                    np.testing.assert_allclose(nib.affines.apply_affine(original.affine, old_coords),
+                                               expected_world, atol=1e-12)
+                    result = oriented.restore(oriented.ras)
+                    np.testing.assert_array_equal(result.dataobj, original.dataobj)
+                    np.testing.assert_array_equal(result.affine, original.affine)
+                    self.assertEqual(result.header.get_data_dtype(), np.dtype(np.int16))
+
+    def test_scaling_is_decoded_once_and_never_reapplied(self):
+        values = np.arange(60, dtype=np.int16).reshape(3, 4, 5)
+        src = image(values).as_reoriented(np.array([[0, -1], [1, -1], [2, 1]]))
+        src.header.set_slope_inter(0.375, -1024.25)
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "scaled.nii.gz"
+            nib.save(src, path)
+            original = nib.load(path)
+            oriented = orient_input(original)
+            np.testing.assert_array_equal(oriented.ras.dataobj, values * 0.375 - 1024.25)
+            self.assertEqual(original.get_data_dtype(), np.dtype(np.int16))
+            output = path.with_name("round_trip.nii.gz")
+            save_nifti_no_clobber(oriented.restore(oriented.ras), output)
+            np.testing.assert_array_equal(nib.load(output).dataobj, np.asanyarray(original.dataobj))
+
+    def test_non_ras_conflicting_coded_forms_are_rejected(self):
+        source = image().as_reoriented(np.array([[0, -1], [1, -1], [2, 1]]))
+        bad = source.affine.copy()
+        bad[0, 3] += 1
+        source.set_qform(bad, 1)
+        with self.assertRaisesRegex(ValueError, "qform/sform"):
+            orient_input(source)
+
+
 class GeometryTests(unittest.TestCase):
     def test_matching_and_subtolerance_geometry(self):
         compare_geometry(image(), image())
@@ -58,8 +114,9 @@ class GeometryTests(unittest.TestCase):
                 compare_geometry(image(), image(affine=affine))
         affine = image().affine.copy()
         affine[0, 0] *= -1
-        with self.assertRaisesRegex(ValueError, "RAS"):
-            validate_image(image(affine=affine))
+        flipped = validate_image(image(affine=affine))
+        with self.assertRaisesRegex(ValueError, "orientation"):
+            compare_geometry(image(), flipped)
 
     def test_corner_accumulation_and_qform_conflict(self):
         affine = image().affine.copy()

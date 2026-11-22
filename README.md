@@ -278,9 +278,9 @@ concatenates first-half then second-half predictions without overlap or label
 reconciliation. V3 preserves that algorithm for `Z >= 2`, with the odd extra
 slice in the second part. A one-slice volume is processed unsplit to avoid V2's
 empty-part failure. Each part is submitted independently. Its affine is
-`original_affine @ voxel_translation(0, 0, z_start)`; V2's second-half origin
-adjustment used only the world-Z component. No external normalization,
-downsampling, reorientation, or image-space resampling is introduced.
+`ras_affine @ voxel_translation(0, 0, z_start)`; V2's second-half origin
+adjustment used only the world-Z component. V3 splits along Z in the internal RAS
+grid and restores the merged prediction to the original reference grid.
 
 Predictions must match their part's input grid, contain nonnegative discrete
 labels from model 802's `dataset.json`, and merge to the original dimensions.
@@ -360,13 +360,14 @@ closed; no fallback uses an overwriting rename. Ordinary explicit ZIP directory
 entries are accepted, including DOS/Unix attributes and directories listed after
 their children. Unsafe entries in unselected models are still rejected.
 
-Inputs must be readable, nonempty, finite, real-valued 3D NIfTI images in RAS
-orientation. Dimensions and orientation must match; spacing and physical voxel
-alignment are checked with a **0.001 mm** tolerance (maximum Euclidean distance
+Inputs must be readable, nonempty, finite, real-valued 3D NIfTI images. V3
+converts voxel axes to RAS in memory by permutation and flipping, with affine
+updates that retain physical voxel locations and any obliquity. Alignment is
+checked on the resulting grids with a **0.001 mm** tolerance (maximum Euclidean distance
 between corresponding voxel-centre corners). Spatial units must be declared as
 mm, meter, or micron; unknown units are rejected rather than assumed. Conflicting
 coded qform/sform transforms, singular affines, and NaN/infinity are rejected.
-No automatic reorientation, registration, or resampling is performed.
+Axis reorientation uses no interpolation, registration, or resampling.
 
 Supplied spine masks must have nonempty, finite, integer-valued labels and match
 the required reconstruction grid. Probabilistic masks are rejected. All nonzero
@@ -383,16 +384,22 @@ while the exact sform is retained. Explicit channel writing uses deterministic
 `case_0001_0000.nii.gz`, etc., in a fresh directory. Reconstruction validates the
 cropped binary lesion grid before insertion into the original reference grid;
 explicit reconstruction writing validates a complete temporary `.nii.gz`, then
-publishes via an atomic no-clobber hard link. Existing destinations, including
-concurrently created ones, remain untouched; failed temporary files are cleaned
-up. This requires filesystem hard-link support. Strict lesion labels remain 0/1;
+publishes via an atomic no-clobber rename. Existing destinations, including
+concurrently created ones, remain untouched and failed temporary files are cleaned
+up. Strict lesion labels remain 0/1;
 the lesion adapter verifies that convention against each installed model's
 metadata before inference. No external normalization or
 morphology is applied. These utilities do not perform inference.
 
-For lesion preprocessing, reference selection is ConvCT for automatic spine mode, the first required
-reconstruction for supplied-mask lesion mode, or the mask for supplied-mask
-spine-only mode. `--validate_only` checks these grids without producing predictions.
+The reference is ConvCT when spine prediction is automatic. For lesion prediction
+with a supplied spine mask it is the model's first required reconstruction
+(VMI_40 for model 710). For spine-only mode with a supplied mask it is ConvCT if
+present, otherwise the supplied mask. All generated masks are returned to the
+reference's original voxel grid. The byte-for-byte copy of a supplied mask retains
+its original grid. The manifest records each input's original and RAS geometry,
+forward transforms and the reference inverse. Split and crop indices refer to
+the internal reference RAS grid. `--validate_only` checks these grids without
+producing predictions.
 Published plans remain unchanged. Exact benchmark
 training crop padding/affine handling remains unverified; five-voxel padding
 preserves the existing pipeline's principle. Legacy V1/V2 utilities are unchanged.

@@ -19,11 +19,11 @@ from benchmark_model_installation import (
 )
 from benchmark_nifti import (
     binary_spine_mask, compare_geometry, load_nifti, prepare_lesion_channels,
-    reconstruct_lesions, save_nifti_no_clobber, save_prepared_channels,
+    reconstruct_lesions, save_nifti_no_clobber, save_prepared_channels, image_geometry,
     validate_label_values,
 )
 from benchmark_spine_inference import (
-    create_predictor, infer_spine, validate_labels, _label_image, _geometry,
+    create_predictor, infer_spine, validate_labels, _label_image,
 )
 
 
@@ -159,16 +159,18 @@ def run_lesion_pipeline(plan, validated_inputs, *, installer=None,
         spine_dir, lesion_dir = stage / "spine", stage / "lesion"
         spine_dir.mkdir()
         lesion_dir.mkdir()
-        save_nifti_no_clobber(labelled, spine_dir / "spine_labelled.nii.gz")
-        save_nifti_no_clobber(binary, spine_dir / "spine_binary.nii.gz")
-        save_nifti_no_clobber(lesions, lesion_dir / "lesion_labelled.nii.gz")
+        published_labelled = validated_inputs.reference.restore(labelled)
+        published_lesions = validated_inputs.reference.restore(lesions)
+        save_nifti_no_clobber(published_labelled, spine_dir / "spine_labelled.nii.gz")
+        save_nifti_no_clobber(validated_inputs.reference.restore(binary), spine_dir / "spine_binary.nii.gz")
+        save_nifti_no_clobber(published_lesions, lesion_dir / "lesion_labelled.nii.gz")
         if segmentation is not None:
             shutil.copyfile(str(plan.spine_segmentation), str(spine_dir / "spine_supplied.nii.gz"))
         if work.resolve().parent != stage.resolve():
             raise LesionInferenceError("Temporary work directory escaped its run directory")
         shutil.rmtree(work)
         manifest = {
-            "schema_version": 2, "phase": "4B", "status": "completed",
+            "schema_version": 3, "phase": "4B", "status": "completed",
             "completed_at": datetime.now(timezone.utc).isoformat(),
             "spine_source": "automatic" if spine_model else "supplied",
             "source_convct": "ConvCT.nii.gz" if "ConvCT" in reconstructions else None,
@@ -179,10 +181,12 @@ def run_lesion_pipeline(plan, validated_inputs, *, installer=None,
             "split_fallback": "single_z_slice" if spine_model and plan.split and reference.shape[2] == 1 else None,
             "input_modalities": list(reconstructions), "lesion_modalities": list(spec.required_modalities),
             "ordered_lesion_channels": list(spec.channel_names),
-            "reference_geometry": _geometry(reference), "cropped_geometry": _geometry(prepared.images[0]),
-            "output_geometry": _geometry(lesions), "spine_geometry": _geometry(labelled),
+            "reference_geometry": image_geometry(validated_inputs.reference.original),
+            "cropped_geometry": image_geometry(prepared.images[0]),
+            "output_geometry": image_geometry(published_lesions), "spine_geometry": image_geometry(published_labelled),
+            "orientation": validated_inputs.orientation_provenance(),
             "crop": {"start": list(prepared.crop.start), "stop": list(prepared.crop.stop),
-                     "upper_bounds": "exclusive", "padding_voxels": 5,
+                     "upper_bounds": "exclusive", "padding_voxels": 5, "grid": "reference_ras",
                      "original_shape": list(prepared.crop.original_shape)},
             "labelled_output": "spine/spine_labelled.nii.gz", "binary_output": "spine/spine_binary.nii.gz",
             "lesion_output": "lesion/lesion_labelled.nii.gz", "lesion_inference": "completed",

@@ -171,6 +171,65 @@ class LesionTests(unittest.TestCase):
                 self.assertFalse((result / "work").exists())
                 self.assertNotIn(str(self.root), json.dumps(manifest))
 
+    def test_mixed_orientation_runs_restore_reference_and_preserve_sources(self):
+        transform = np.array([[2, -1], [0, 1], [1, -1]])
+        for supplied in (False, True):
+            with self.subTest(supplied=supplied):
+                plan = self.plan(supplied=supplied)
+                ref_path = self.inputs / ("VMI_40.nii.gz" if supplied else "ConvCT.nii.gz")
+                old_ref = nib.load(ref_path)
+                source = old_ref.as_reoriented(transform)
+                nib.save(source, ref_path)
+                original = nib.load(ref_path)
+                paths = [ref_path, self.mask_path if supplied else self.inputs / "VMI_40.nii.gz"]
+                before = {path: path.read_bytes() for path in paths}
+                result, fake = self.run_pipeline(plan)
+                manifest = json.loads((result / "run.json").read_text())
+                self.assertEqual(manifest["orientation"]["reference_input"], "VMI_40" if supplied else "ConvCT")
+                self.assertEqual(manifest["crop"]["grid"], "reference_ras")
+                self.assertEqual(manifest["split_effective"], None if supplied else True)
+                self.assertEqual(nib.aff2axcodes(fake.channels[0].affine), ("R", "A", "S"))
+                for key in ("labelled_output", "binary_output", "lesion_output"):
+                    actual = load_nifti(result / manifest[key])
+                    compare_geometry(original, actual)
+                    np.testing.assert_array_equal(actual.affine, original.affine)
+                    self.assertEqual(actual.header.get_zooms(), original.header.get_zooms())
+                    for getter in ("get_qform", "get_sform"):
+                        actual_form, actual_code = getattr(actual, getter)(coded=True)
+                        original_form, original_code = getattr(original, getter)(coded=True)
+                        self.assertEqual(actual_code, original_code)
+                        np.testing.assert_array_equal(actual_form, original_form)
+                lesion = nib.as_closest_canonical(nib.load(result / manifest["lesion_output"]))
+                start, stop = manifest["crop"]["start"], manifest["crop"]["stop"]
+                expected = np.zeros(old_ref.shape, np.uint8)
+                expected[tuple(start)] = expected[tuple(v-1 for v in stop)] = 1
+                np.testing.assert_array_equal(lesion.dataobj, expected)
+                self.assertEqual(before, {path: path.read_bytes() for path in paths})
+                if supplied:
+                    self.assertEqual((result / "spine/spine_supplied.nii.gz").read_bytes(), before[self.mask_path])
+
+    def test_non_ras_failed_inference_does_not_publish_or_change_inputs(self):
+        plan = self.plan(supplied=True)
+        path = self.inputs / "VMI_40.nii.gz"
+        source = nib.load(path)
+        nib.save(source.as_reoriented(np.array([[1, 1], [2, -1], [0, -1]])), path)
+        before = {source_path: source_path.read_bytes() for source_path in (path, self.mask_path)}
+        with self.assertRaisesRegex(LesionInferenceError, "mock lesion predictor failure"):
+            self.run_pipeline(plan, LesionPredictor(plan.lesion_model, fail=True))
+        self.assertEqual(list(self.output.iterdir()), [])
+        self.assertEqual(before, {source_path: source_path.read_bytes() for source_path in before})
+
+    def test_reorientation_cannot_hide_physical_misalignment(self):
+        plan = self.plan(supplied=True)
+        original = nib.load(self.mask_path)
+        oriented = original.as_reoriented(np.array([[0, -1], [1, -1], [2, 1]]))
+        shifted = oriented.affine.copy()
+        shifted[0, 3] += 0.1
+        nib.save(_new_image(np.asanyarray(oriented.dataobj), oriented, shifted), self.mask_path)
+        with self.assertRaisesRegex(ValueError, "alignment"):
+            validate_plan_inputs(plan)
+        self.assertFalse(self.output.exists())
+
     def test_automatic_preflight_resolves_both_before_predictor(self):
         plan = self.plan(708, supplied=False)
         events = []
