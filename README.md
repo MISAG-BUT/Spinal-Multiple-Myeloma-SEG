@@ -571,6 +571,12 @@ prediction launchers and uses the exact nnU-Net v2.6.4 Git revision recorded in
 `pyproject.toml`. Git and network access are needed for the initial dependency
 installation. The nnU-Net source is installed as a Python dependency.
 
+The tested profile uses Ubuntu 24.04 (Python 3.12.3), PyTorch 2.10.0 and
+torchvision 0.25.0 (both CUDA 13.0 builds), and pydicom 3.0.2. The lockfile
+pins the CUDA runtime libraries used by PyTorch.
+pydicom 3.0.2 addresses [CVE-2026-32711](https://github.com/pydicom/pydicom/releases/tag/v3.0.2).
+Use only trusted nnU-Net checkpoints.
+
 The checked-in lock and pip export target this Linux profile. Windows, macOS,
 other Python versions and alternative Torch builds require their own dependency
 resolution and validation. Keep any existing legacy environments for those
@@ -598,13 +604,47 @@ torchvision use the explicit official CUDA 13.0 index. The local environment is
 `.venv`. For the optional DICOM viewer and its Qt dependencies:
 
 ```bash
-uv sync --extra gui
-uv run --extra gui spinal-db-viewer --help
+uv sync --locked --extra gui
+uv run --locked --extra gui spinal-db-viewer --help
 ```
 
 An interactive viewer session also needs a working display and system Qt
 libraries for the selected backend. Any external NIfTI viewer can overlay the
 final V3 masks on the original reference image.
+
+After installing the GUI extra, keep using `--extra gui` with `uv sync` and
+`uv run`. A sync without the extra can remove its packages from the
+environment. Running `.venv/bin/python` directly does not synchronize it.
+
+#### Run the Python scripts directly
+
+Run these commands from the repository root. Each script accepts the same
+arguments as its corresponding launcher.
+
+```bash
+uv run python run_prediction_of_nnUNet_networks_on_TCIA_data_final.py --help
+uv run python run_prediction_of_nnUNet_networks_on_new_data.py --help
+uv run python run_prediction_of_nnUNet_benchmark_models.py --help
+uv run --locked --extra gui python Database_viewer_final.py --help
+```
+
+To use the installed interpreter directly, replace `uv run python` (or
+`uv run --locked --extra gui python`) with `.venv/bin/python`. If you keep
+the GUI extra installed, include `--extra gui` on the prediction commands too.
+
+In VS Code, open the repository folder and select `.venv/bin/python` via
+**Python: Select Interpreter**. Open the script, set a breakpoint, then use
+a Python Debugger configuration with the workspace root as its working
+directory. Put each command-line argument in a separate entry in
+`args`. Start with `["--help"]` or use the relevant prediction example with
+your own input and output paths.
+
+The bundled database viewer uses DICOM series and the legacy segmentation
+layout. To inspect V3 results, open the original reference CT and the published
+V3 masks together in a NIfTI viewer that respects image affines.
+Connected components in a predicted lesion mask do not establish a clinically
+confirmed lesion count. Technical regression checks measure reproducibility on
+the tested inputs.
 
 #### Alternative installation with pip
 

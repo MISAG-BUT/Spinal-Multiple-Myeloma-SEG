@@ -226,7 +226,7 @@ pydantic==2.14.4 ; platform_machine == 'x86_64' and sys_platform == 'linux'
     # via blosc2
 pydantic-core==2.50.5 ; platform_machine == 'x86_64' and sys_platform == 'linux'
     # via pydantic
-pydicom==3.0.1 ; platform_machine == 'x86_64' and sys_platform == 'linux'
+pydicom==3.0.2 ; platform_machine == 'x86_64' and sys_platform == 'linux'
     # via spinal-multiple-myeloma-seg
 pygments==2.21.0 ; platform_machine == 'x86_64' and sys_platform == 'linux'
     # via rich
