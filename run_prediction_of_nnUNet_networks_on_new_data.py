@@ -74,13 +74,15 @@ setup_nnunet_env()
 # ----------------------------------------------------------
 # Project-specific imports
 # ----------------------------------------------------------
-from utils.legacy import get_patient_name
-from utils.legacy import maybe_mkdir_p
-from utils.legacy import merge_data
-from utils.legacy import prepare_data_for_lesion_segmentation
-from utils.legacy import reorient_lesion_segmentation_to_original_space
-from utils.legacy import run_nnunet_inference
-from utils.legacy import split_convCT_data
+from utils.legacy import (
+    get_patient_name,
+    maybe_mkdir_p,
+    merge_data,
+    prepare_data_for_lesion_segmentation,
+    reorient_lesion_segmentation_to_original_space,
+    run_nnunet_inference,
+    split_convCT_data,
+)
 
 
 # ==========================================================
