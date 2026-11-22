@@ -225,5 +225,67 @@ class PackagingTests(unittest.TestCase):
             self.assertIn('"{}",'.format(module), text)
 
 
+
+class ExplicitInputTests(unittest.TestCase):
+    def setUp(self):
+        from run_prediction_of_nnUNet_benchmark_models import MODALITY_OPTIONS
+        self.options = MODALITY_OPTIONS
+        temporary = tempfile.TemporaryDirectory()
+        self.addCleanup(temporary.cleanup)
+        self.root = Path(temporary.name)
+        self.base = ["--case_id", "Myel_001", "--output_dir", str(self.root / "out")]
+        self.files = {}
+        self.spine = self.root / "spine.nii"
+        self.spine.touch()
+        for i, name in enumerate(self.options):
+            path = self.root / (str(i) + (".nii" if i % 2 else ".nii.gz"))
+            path.touch()
+            self.files[name] = path
+
+    def test_explicit_required_modalities_follow_all_registry_models(self):
+        from benchmark_model_registry import LESION_MODELS
+        for model_id, model in LESION_MODELS.items():
+            for supplied in (True, False):
+                with self.subTest(model=model_id, supplied=supplied):
+                    names = list(model.required_modalities)
+                    if not supplied and "ConvCT" not in names:
+                        names.insert(0, "ConvCT")
+                    arguments = self.base + ["--lesion_model", str(model_id)]
+                    if supplied:
+                        arguments += ["--spine_segmentation", str(self.spine)]
+                    for name in reversed(names):
+                        arguments += [self.options[name], str(self.files[name])]
+                    plan = parse_arguments(arguments)
+                    self.assertEqual(plan.modality_paths, tuple((name, self.files[name]) for name in names))
+                    self.assertEqual(plan.case_id, "Myel_001")
+
+    def test_conflicts_and_missing_explicit_inputs_fail(self):
+        from run_prediction_of_nnUNet_benchmark_models import build_parser, validate_arguments
+        arguments = self.base + ["--lesion_model", "710"]
+        conv = [self.options["ConvCT"], str(self.files["ConvCT"])]
+        for extra, message in (
+            (conv, "Missing required"),
+            (conv + conv, "may only be specified once"),
+            (conv + ["--input_dir", str(self.root)], "cannot be combined"),
+            (conv + [self.options["VMI_80"], str(self.files["VMI_80"])], "Unused explicit"),
+            ([self.options["ConvCT"], str(self.root / "missing.nii")], "Expected an existing"),
+        ):
+            with self.subTest(extra=extra), self.assertRaisesRegex(ValueError, message):
+                validate_arguments(build_parser().parse_args(arguments + extra))
+        with self.assertRaisesRegex(ValueError, "--case_id is required"):
+            validate_arguments(build_parser().parse_args(arguments[2:] + conv))
+
+    def test_case_id_safety_and_directory_default(self):
+        from run_prediction_of_nnUNet_benchmark_models import validate_case_id
+        for value in ("", ".", "..", "a/b", "a\\b", "x:y", "AUX", "lpt9", "a.", "a ", "é", "a" * 81):
+            with self.subTest(value=value), self.assertRaisesRegex(ValueError, "Unsafe case ID"):
+                validate_case_id(value)
+        case = self.root / "Case_42"
+        case.mkdir()
+        (case / "ConvCT.nii.gz").touch()
+        plan = parse_arguments(["--input_dir", str(case), "--output_dir", str(self.root / "out"),
+                               "--skip_lesion_segmentation"])
+        self.assertEqual(plan.case_id, "Case_42")
+
 if __name__ == "__main__":
     unittest.main()

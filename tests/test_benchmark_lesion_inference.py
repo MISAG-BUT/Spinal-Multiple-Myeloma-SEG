@@ -162,12 +162,12 @@ class LesionTests(unittest.TestCase):
                 np.testing.assert_array_equal(fake.channels[-1].dataobj, expected_mask)
                 expected = np.zeros(self.reference.shape, np.uint8)
                 expected[6, 7, 8] = expected[16, 17, 18] = 1
-                lesions = load_nifti(result / "lesion/lesion_labelled.nii.gz")
+                lesions = load_nifti(result / json.loads((result / "run.json").read_text())["lesion_output"])
                 np.testing.assert_array_equal(lesions.dataobj, expected)
                 compare_geometry(validated[2], lesions)
                 self.assertEqual(before, {path: path.read_bytes() for path in self.inputs.iterdir()})
                 self.assertEqual(source_bytes, self.mask_path.read_bytes())
-                self.assertEqual((result / "spine/spine_supplied.nii.gz").read_bytes(), source_bytes)
+                self.assertEqual((result / json.loads((result / "run.json").read_text())["supplied_spine_copy"]).read_bytes(), source_bytes)
                 self.assertFalse((result / "work").exists())
                 self.assertNotIn(str(self.root), json.dumps(manifest))
 
@@ -206,7 +206,7 @@ class LesionTests(unittest.TestCase):
                 np.testing.assert_array_equal(lesion.dataobj, expected)
                 self.assertEqual(before, {path: path.read_bytes() for path in paths})
                 if supplied:
-                    self.assertEqual((result / "spine/spine_supplied.nii.gz").read_bytes(), before[self.mask_path])
+                    self.assertEqual((result / json.loads((result / "run.json").read_text())["supplied_spine_copy"]).read_bytes(), before[self.mask_path])
 
     def test_non_ras_failed_inference_does_not_publish_or_change_inputs(self):
         plan = self.plan(supplied=True)
@@ -229,6 +229,34 @@ class LesionTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "alignment"):
             validate_plan_inputs(plan)
         self.assertFalse(self.output.exists())
+
+    def test_explicit_supplied_uncompressed_and_repeated_outputs(self):
+        self.plan(710)
+        source = self.root / "supplied.nii"
+        nib.save(nib.load(self.mask_path), source)
+        vmi = self.inputs / "VMI_40.nii.gz"
+        arguments = ["--path_to_VMI40_nifti", str(vmi), "--case_id", "Myel_001",
+                     "--spine_segmentation", str(source), "--output_dir", str(self.output),
+                     "--lesion_model", "710"]
+        plan = parse_arguments(arguments)
+        first, _ = self.run_pipeline(plan)
+        self.assertEqual(first.name, "Myel_001_output")
+        expected = {
+            "labelled_output": "Segmentation/Spine_segmentation_final/Myel_001_spine_segmentation.nii.gz",
+            "binary_output": "Segmentation/Spine_segmentation_final/Myel_001_spine_binary.nii.gz",
+            "lesion_output": "Segmentation/Lesion_segmentation_final/Myel_001_lesions_segmentation.nii.gz",
+            "supplied_spine_copy": "Segmentation/Spine_segmentation_final/Myel_001_spine_supplied.nii",
+        }
+        manifest = json.loads((first / "run.json").read_text())
+        self.assertEqual({key: manifest[key] for key in expected}, expected)
+        self.assertEqual(manifest["case_id"], "Myel_001")
+        self.assertEqual(manifest["source_reconstructions"], {"VMI_40": vmi.name})
+        original = {p.relative_to(first): p.read_bytes() for p in first.rglob("*") if p.is_file()}
+        self.assertEqual(set(map(str, original)), {"run.json", *expected.values()})
+        self.assertEqual((first / expected["supplied_spine_copy"]).read_bytes(), source.read_bytes())
+        second, _ = self.run_pipeline(plan)
+        self.assertRegex(second.name, r"^Myel_001_output-[0-9a-f]{32}$")
+        self.assertEqual(original, {p.relative_to(first): p.read_bytes() for p in first.rglob("*") if p.is_file()})
 
     def test_automatic_preflight_resolves_both_before_predictor(self):
         plan = self.plan(708, supplied=False)
@@ -338,7 +366,7 @@ class LesionTests(unittest.TestCase):
         manifest = json.loads((result / "run.json").read_text())
         self.assertEqual(manifest["crop"]["start"], [7, 8, 0])
         self.assertEqual(manifest["crop"]["stop"], [18, 19, 6])
-        self.assertEqual(load_nifti(result / "lesion/lesion_labelled.nii.gz").shape, (24, 26, 28))
+        self.assertEqual(load_nifti(result / json.loads((result / "run.json").read_text())["lesion_output"]).shape, (24, 26, 28))
         self.assertEqual(path.read_bytes(), original_bytes)
 
     def test_loaded_lesion_trainer_and_configuration_are_checked(self):
@@ -382,19 +410,20 @@ class LesionTests(unittest.TestCase):
                 expected = np.zeros(self.reference.shape, np.uint8)
                 expected[start] = 1
                 expected[tuple(value-1 for value in stop)] = 1
-                np.testing.assert_array_equal(load_nifti(result / "lesion/lesion_labelled.nii.gz").dataobj, expected)
+                np.testing.assert_array_equal(load_nifti(result / json.loads((result / "run.json").read_text())["lesion_output"]).dataobj, expected)
 
     def test_qform_only_and_background_only_lesions(self):
         self.reference.set_sform(None, 0)
         plan = self.plan(710)
         result, _ = self.run_pipeline(plan, LesionPredictor(plan.lesion_model, empty=True))
         original = load_nifti(self.inputs / "VMI_40.nii.gz")
-        for filename in ("lesion/lesion_labelled.nii.gz", "spine/spine_labelled.nii.gz", "spine/spine_binary.nii.gz"):
-            output = load_nifti(result / filename)
+        manifest = json.loads((result / "run.json").read_text())
+        for key in ("lesion_output", "labelled_output", "binary_output"):
+            output = load_nifti(result / manifest[key])
             self.assertEqual(int(output.header["qform_code"]), int(original.header["qform_code"]))
             self.assertEqual(int(output.header["sform_code"]), int(original.header["sform_code"]))
             np.testing.assert_array_equal(output.affine, original.affine)
-        self.assertEqual(load_nifti(result / "lesion/lesion_labelled.nii.gz").get_fdata().sum(), 0)
+        self.assertEqual(load_nifti(result / json.loads((result / "run.json").read_text())["lesion_output"]).get_fdata().sum(), 0)
 
     def test_invalid_labels_geometry_and_predictor_failure_publish_nothing(self):
         plan = self.plan(710)
@@ -501,7 +530,7 @@ class LesionTests(unittest.TestCase):
                     self.assertEqual(cli(args), 5)
                 self.assertIn("Cannot publish lesion run", error.getvalue())
                 self.assertNotIn("Traceback", error.getvalue())
-        self.assertEqual(len(list(self.output.glob("run-*"))), 1)
+        self.assertEqual(len(list(self.output.glob("*_output*"))), 1)
         self.assertFalse(list(self.output.glob(".v3-*")))
 
     def test_validation_only_imports_no_inference_dependencies_and_creates_nothing(self):
@@ -549,7 +578,7 @@ sys.exit(cli(sys.argv[1:]))
         def as_float(prediction):
             return _new_image(np.asanyarray(prediction.dataobj).astype(np.float64), prediction, prediction.affine)
         result, _ = self.run_pipeline(plan, LesionPredictor(plan.lesion_model, transform=as_float))
-        output = load_nifti(result / "lesion/lesion_labelled.nii.gz")
+        output = load_nifti(result / json.loads((result / "run.json").read_text())["lesion_output"])
         self.assertEqual(output.get_data_dtype(), np.dtype("uint8"))
         self.assertEqual(int(np.asanyarray(output.dataobj).sum()), 2)
 
@@ -678,7 +707,7 @@ sys.exit(cli(sys.argv[1:]))
                 self.assertFalse(list(self.output.glob(".v3-*")))
                 self.assertFalse(list(self.output.rglob("run.json")))
                 self.assertEqual(sentinel.read_bytes(), b"preserve")
-                for destination in self.output.glob("run-*"):
+                for destination in self.output.glob("*_output*"):
                     self.assertEqual((destination / "sentinel").read_bytes(), b"existing run")
 
     def test_automatic_spine_failure_cannot_publish_a_lesion_run(self):

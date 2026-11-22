@@ -9,7 +9,6 @@ import json
 from pathlib import Path
 import shutil
 import tempfile
-import uuid
 
 import nibabel as nib
 import numpy as np
@@ -19,7 +18,7 @@ from benchmark_model_installation import ModelInstaller, InstallationError, _pub
 from benchmark_nifti import (
     Crop, _new_image, binary_spine_mask, compare_geometry, crop_image,
     load_nifti, save_nifti_no_clobber, validate_image, image_on_reference_grid, image_geometry,
-    validate_label_values,
+    validate_label_values, case_output_paths, publish_case_run,
 )
 
 
@@ -162,7 +161,6 @@ def run_spine_only(plan, validated_inputs, *, installer=None, predictor_factory=
         )
     output = Path(plan.output_dir)
     output.mkdir(parents=True, exist_ok=True)
-    destination = output / ("run-" + uuid.uuid4().hex)
     with tempfile.TemporaryDirectory(prefix=".v3-spine-", dir=str(output)) as temporary:
         stage = Path(temporary)
         work = stage / "work"
@@ -176,24 +174,25 @@ def run_spine_only(plan, validated_inputs, *, installer=None, predictor_factory=
             split_effective = None
         validate_labels(labelled)
         compare_geometry(reference, labelled, "final spine segmentation")
-        spine_dir = stage / "spine"
-        spine_dir.mkdir()
+        paths = case_output_paths(plan)
+        for folder in {Path(path).parent for path in paths.values()}:
+            (stage / folder).mkdir(parents=True, exist_ok=True)
         published_labelled = validated_inputs.reference.restore(labelled)
-        save_nifti_no_clobber(published_labelled, spine_dir / "spine_labelled.nii.gz")
+        save_nifti_no_clobber(published_labelled, stage / paths["labelled_output"])
         binary = binary_spine_mask(labelled)
         binary = _label_image(np.asanyarray(binary.dataobj), reference)
-        save_nifti_no_clobber(validated_inputs.reference.restore(binary), spine_dir / "spine_binary.nii.gz")
+        save_nifti_no_clobber(validated_inputs.reference.restore(binary), stage / paths["binary_output"])
         if segmentation is not None:
-            shutil.copyfile(str(plan.spine_segmentation), str(spine_dir / "spine_supplied.nii.gz"))
-        # Work directory is owned by this run, under its unique staging directory.
+            shutil.copyfile(str(plan.spine_segmentation), str(stage / paths["supplied_spine_copy"]))
         if work.resolve().parent != stage.resolve():
             raise SpineInferenceError("Temporary work directory escaped its run directory")
         shutil.rmtree(work)
         manifest = {
-            "schema_version": 3, "phase": "4A", "status": "completed",
+            "schema_version": 4, "case_id": plan.case_id, "phase": "4A", "status": "completed",
             "completed_at": datetime.now(timezone.utc).isoformat(),
             "spine_source": "automatic" if resolved else "supplied",
-            "source_convct": "ConvCT.nii.gz" if "ConvCT" in reconstructions else None,
+            "source_convct": next((path.name for name, path in plan.modality_paths if name == "ConvCT"), None),
+            "source_reconstructions": {name: path.name for name, path in plan.modality_paths},
             "source_segmentation": plan.spine_segmentation.name if segmentation is not None else None,
             "split_requested": plan.split, "split_effective": split_effective,
             "split_fallback": "single_z_slice" if resolved and plan.split and reference.shape[2] == 1 else None,
@@ -204,13 +203,12 @@ def run_spine_only(plan, validated_inputs, *, installer=None, predictor_factory=
             "reference_geometry": image_geometry(validated_inputs.reference.original),
             "output_geometry": image_geometry(published_labelled),
             "orientation": validated_inputs.orientation_provenance(),
-            "labelled_output": "spine/spine_labelled.nii.gz",
-            "binary_output": "spine/spine_binary.nii.gz", "lesion_inference": "not_requested",
+            **paths, "lesion_inference": "not_requested",
         }
         with (stage / "run.json").open("x", encoding="utf-8") as stream:
             json.dump(manifest, stream, indent=2)
         try:
-            _publish_directory(stage, destination)
+            destination = publish_case_run(stage, output, plan.case_id, _publish_directory)
         except InstallationError as error:
             # The shared native rename helper uses InstallationError, but this
             # is patient-output publication, not model installation (CLI code 5).

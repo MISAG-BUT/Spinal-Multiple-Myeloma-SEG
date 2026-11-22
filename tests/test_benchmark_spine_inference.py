@@ -181,8 +181,8 @@ class SpineTests(unittest.TestCase):
         sentinel.write_bytes(b"preserve")
         result, installer = self.execute(self.plan())
         installer.resolve.assert_called_once_with(802, spine_model_dir=None, allow_download=False)
-        labelled = load_nifti(result / "spine/spine_labelled.nii.gz")
-        binary = load_nifti(result / "spine/spine_binary.nii.gz")
+        labelled = load_nifti(result / json.loads((result / "run.json").read_text())["labelled_output"])
+        binary = load_nifti(result / json.loads((result / "run.json").read_text())["binary_output"])
         np.testing.assert_array_equal(labelled.dataobj, reference.dataobj)
         self.assertTrue(np.all(binary.get_fdata() == 1))
         manifest = json.loads((result / "run.json").read_text())
@@ -210,9 +210,9 @@ class SpineTests(unittest.TestCase):
         plan = self.plan(supplied=True)
         with patch("benchmark_spine_inference.ModelInstaller", side_effect=AssertionError("model bypass")), patch("benchmark_spine_inference.create_predictor", side_effect=AssertionError("predictor bypass")):
             result = run_spine_only(plan, validate_plan_inputs(plan))
-        np.testing.assert_array_equal(load_nifti(result / "spine/spine_labelled.nii.gz").dataobj, data)
+        np.testing.assert_array_equal(load_nifti(result / json.loads((result / "run.json").read_text())["labelled_output"]).dataobj, data)
         self.assertEqual(source.read_bytes(), original)
-        self.assertEqual((result / "spine/spine_supplied.nii.gz").read_bytes(), original)
+        self.assertEqual((result / json.loads((result / "run.json").read_text())["supplied_spine_copy"]).read_bytes(), original)
         manifest = json.loads((result / "run.json").read_text())
         self.assertIsNone(manifest["model"])
         self.assertIsNone(manifest["split_effective"])
@@ -300,7 +300,7 @@ sys.exit(cli(sys.argv[1:]))
         values[0, 0, 0] = 9
         nib.save(_new_image(values, reference, reference.affine), source)
         result = run_spine_only(plan, validate_plan_inputs(plan))
-        output = load_nifti(result / "spine/spine_labelled.nii.gz")
+        output = load_nifti(result / json.loads((result / "run.json").read_text())["labelled_output"])
         compare_geometry(reference, output)
         np.testing.assert_array_equal(output.affine, load_nifti(self.input / "ConvCT.nii.gz").affine)
 
@@ -317,11 +317,33 @@ sys.exit(cli(sys.argv[1:]))
         nib.save(reference, self.input / "ConvCT.nii.gz")
         original = load_nifti(self.input / "ConvCT.nii.gz")
         result, _ = self.execute(self.plan(split=False))
-        for name in ("spine_labelled.nii.gz", "spine_binary.nii.gz"):
-            output = load_nifti(result / "spine" / name)
+        manifest = json.loads((result / "run.json").read_text())
+        for key in ("labelled_output", "binary_output"):
+            output = load_nifti(result / manifest[key])
             self.assertEqual(int(output.header["qform_code"]), 1)
             self.assertEqual(int(output.header["sform_code"]), 0)
             np.testing.assert_array_equal(output.affine, original.affine)
+
+    def test_explicit_supplied_spine_only_publishes_case_layout(self):
+        source = self.root / "existing.nii"
+        reference = ct()
+        labels = np.zeros(reference.shape, np.uint16)
+        labels[1, 1, 1] = 256
+        nib.save(_new_image(labels, reference, reference.affine), source)
+        original = source.read_bytes()
+        plan = parse_arguments(["--case_id", "Myel_001", "--spine_segmentation", str(source),
+                                "--output_dir", str(self.output), "--skip_lesion_segmentation"])
+        result = run_spine_only(plan, validate_plan_inputs(plan))
+        manifest = json.loads((result / "run.json").read_text())
+        self.assertEqual(result.name, "Myel_001_output")
+        self.assertEqual(manifest["orientation"]["reference_input"], "spine_segmentation")
+        self.assertNotIn("lesion_output", manifest)
+        self.assertFalse((result / "Segmentation/Lesion_segmentation_final").exists())
+        self.assertEqual(manifest["labelled_output"],
+                         "Segmentation/Spine_segmentation_final/Myel_001_spine_segmentation.nii.gz")
+        np.testing.assert_array_equal(load_nifti(result / manifest["labelled_output"]).dataobj, labels)
+        self.assertEqual((result / manifest["supplied_spine_copy"]).read_bytes(), original)
+        self.assertEqual(source.read_bytes(), original)
 
     def test_failed_publication_preserves_existing_destination(self):
         self.save_ct()
@@ -333,9 +355,10 @@ sys.exit(cli(sys.argv[1:]))
         with patch("benchmark_spine_inference._publish_directory", side_effect=publish), self.assertRaises(FileExistsError):
             self.execute(self.plan())
         runs = list(self.output.iterdir())
-        self.assertEqual(len(runs), 1)
-        self.assertEqual((runs[0] / "sentinel").read_bytes(), b"existing output")
-        self.assertFalse((runs[0] / "run.json").exists())
+        self.assertEqual(len(runs), 2)
+        for run in runs:
+            self.assertEqual((run / "sentinel").read_bytes(), b"existing output")
+            self.assertFalse((run / "run.json").exists())
         self.assertFalse(list(self.output.glob(".v3-*")))
 
     def test_cli_success_validation_only_lesion_preview_and_failures(self):
@@ -389,7 +412,7 @@ sys.exit(cli(sys.argv[1:]))
             with self.subTest(failure=failure):
                 destinations = []
                 def publish(stage, destination):
-                    destination.mkdir()
+                    destination.mkdir(exist_ok=True)
                     (destination / "existing.txt").write_bytes(b"existing output")
                     destinations.append(destination)
                     if failure == "native":
@@ -400,7 +423,7 @@ sys.exit(cli(sys.argv[1:]))
                 error = io.StringIO()
                 with patch("benchmark_spine_inference.ModelInstaller", return_value=installer), patch("benchmark_spine_inference.create_predictor", return_value=FakePredictor()), patch("benchmark_spine_inference._publish_directory", side_effect=publish), contextlib.redirect_stdout(io.StringIO()), contextlib.redirect_stderr(error):
                     self.assertEqual(cli(arguments), 5)
-                self.assertEqual(len(destinations), 1)
+                self.assertEqual(len(destinations), 2 if failure == "collision" else 1)
                 self.assertEqual((destinations[0] / "existing.txt").read_bytes(), b"existing output")
                 self.assertFalse((destinations[0] / "run.json").exists())
                 self.assertFalse(list(self.output.glob(".v3-*")))
@@ -446,7 +469,7 @@ sys.exit(cli(sys.argv[1:]))
             return importer(name, *args, **kwargs)
         with patch("builtins.__import__", side_effect=guarded), patch("benchmark_spine_inference.ModelInstaller", side_effect=AssertionError("model bypass")), patch("socket.socket", side_effect=AssertionError("network forbidden")), contextlib.redirect_stdout(io.StringIO()), contextlib.redirect_stderr(io.StringIO()):
             self.assertEqual(cli(["--input_dir", str(self.input), "--output_dir", str(self.output), "--skip_lesion_segmentation", "--spine_segmentation", str(source), "--install_models"]), 0)
-        self.assertEqual(len(list(self.output.glob("run-*"))), 1)
+        self.assertEqual(len(list(self.output.glob("*_output*"))), 1)
 
     def test_large_uint64_supplied_labels_are_not_rounded_or_overflowed(self):
         reference = ct()
@@ -456,7 +479,7 @@ sys.exit(cli(sys.argv[1:]))
         source = self.root / "supplied.nii.gz"
         nib.save(_new_image(values, reference, reference.affine), source)
         result = run_spine_only(self.plan(supplied=True), validate_plan_inputs(self.plan(supplied=True)))
-        np.testing.assert_array_equal(load_nifti(result / "spine/spine_labelled.nii.gz").dataobj, values)
+        np.testing.assert_array_equal(load_nifti(result / json.loads((result / "run.json").read_text())["labelled_output"]).dataobj, values)
 
     def test_malformed_model_dataset_is_rejected_before_predictor_construction(self):
         invalid = (

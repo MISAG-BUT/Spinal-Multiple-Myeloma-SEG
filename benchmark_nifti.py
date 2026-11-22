@@ -13,6 +13,7 @@ import errno
 import os
 import sys
 import tempfile
+import uuid
 from typing import Tuple
 
 import nibabel as nib
@@ -338,6 +339,33 @@ def save_nifti_no_clobber(image, output_path):
         temporary.unlink(missing_ok=True)
 
 
+def case_output_paths(plan):
+    """Relative paths shared by publication, the manifest and the CLI."""
+    root = Path("Segmentation")
+    spine = root / "Spine_segmentation_final"
+    paths = {
+        "labelled_output": spine / f"{plan.case_id}_spine_segmentation.nii.gz",
+        "binary_output": spine / f"{plan.case_id}_spine_binary.nii.gz",
+    }
+    if plan.lesion_model is not None:
+        paths["lesion_output"] = root / "Lesion_segmentation_final" / f"{plan.case_id}_lesions_segmentation.nii.gz"
+    if plan.spine_segmentation is not None:
+        suffix = ".nii.gz" if plan.spine_segmentation.name.lower().endswith(".nii.gz") else ".nii"
+        paths["supplied_spine_copy"] = spine / f"{plan.case_id}_spine_supplied{suffix}"
+    return {key: path.as_posix() for key, path in paths.items()}
+
+
+def publish_case_run(stage, output, case_id, publish):
+    """Prefer the legacy-shaped name, then retry a collision with a unique suffix."""
+    destination = output / f"{case_id}_output"
+    try:
+        publish(stage, destination)
+    except FileExistsError:
+        destination = output / f"{case_id}_output-{uuid.uuid4().hex}"
+        publish(stage, destination)
+    return destination
+
+
 def image_geometry(image):
     qform, qcode = image.get_qform(coded=True)
     sform, scode = image.get_sform(coded=True)
@@ -436,10 +464,6 @@ def validate_plan_inputs(plan):
     paths = dict(plan.modality_paths)
     if plan.spine_segmentation is not None:
         paths["spine_segmentation"] = plan.spine_segmentation
-        if plan.lesion_model is None:
-            convct = plan.input_dir / "ConvCT.nii.gz"
-            if any(path.name == convct.name for path in plan.input_dir.iterdir()):
-                paths["ConvCT"] = convct
     oriented = {}
     for name, path in paths.items():
         try:

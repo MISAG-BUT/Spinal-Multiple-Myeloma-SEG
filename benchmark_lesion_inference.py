@@ -9,7 +9,6 @@ import json
 from pathlib import Path
 import shutil
 import tempfile
-import uuid
 
 import numpy as np
 
@@ -20,7 +19,7 @@ from benchmark_model_installation import (
 from benchmark_nifti import (
     binary_spine_mask, compare_geometry, load_nifti, prepare_lesion_channels,
     reconstruct_lesions, save_nifti_no_clobber, save_prepared_channels, image_geometry,
-    validate_label_values,
+    validate_label_values, case_output_paths, publish_case_run,
 )
 from benchmark_spine_inference import (
     create_predictor, infer_spine, validate_labels, _label_image,
@@ -137,7 +136,6 @@ def run_lesion_pipeline(plan, validated_inputs, *, installer=None,
         raise InstallationError("Model preflight failed: {}".format(error)) from error
     output = Path(plan.output_dir)
     output.mkdir(parents=True, exist_ok=True)
-    destination = output / ("run-" + uuid.uuid4().hex)
     with tempfile.TemporaryDirectory(prefix=".v3-lesion-", dir=str(output)) as temporary:
         stage = Path(temporary)
         work = stage / "work"
@@ -156,24 +154,25 @@ def run_lesion_pipeline(plan, validated_inputs, *, installer=None,
                                            predictor_factory=lesion_predictor_factory)
         lesions = reconstruct_lesions(cropped_prediction, prepared.crop, reference)
         compare_geometry(reference, lesions, "full lesion segmentation")
-        spine_dir, lesion_dir = stage / "spine", stage / "lesion"
-        spine_dir.mkdir()
-        lesion_dir.mkdir()
+        paths = case_output_paths(plan)
+        for folder in {Path(path).parent for path in paths.values()}:
+            (stage / folder).mkdir(parents=True, exist_ok=True)
         published_labelled = validated_inputs.reference.restore(labelled)
         published_lesions = validated_inputs.reference.restore(lesions)
-        save_nifti_no_clobber(published_labelled, spine_dir / "spine_labelled.nii.gz")
-        save_nifti_no_clobber(validated_inputs.reference.restore(binary), spine_dir / "spine_binary.nii.gz")
-        save_nifti_no_clobber(published_lesions, lesion_dir / "lesion_labelled.nii.gz")
+        save_nifti_no_clobber(published_labelled, stage / paths["labelled_output"])
+        save_nifti_no_clobber(validated_inputs.reference.restore(binary), stage / paths["binary_output"])
+        save_nifti_no_clobber(published_lesions, stage / paths["lesion_output"])
         if segmentation is not None:
-            shutil.copyfile(str(plan.spine_segmentation), str(spine_dir / "spine_supplied.nii.gz"))
+            shutil.copyfile(str(plan.spine_segmentation), str(stage / paths["supplied_spine_copy"]))
         if work.resolve().parent != stage.resolve():
             raise LesionInferenceError("Temporary work directory escaped its run directory")
         shutil.rmtree(work)
         manifest = {
-            "schema_version": 3, "phase": "4B", "status": "completed",
+            "schema_version": 4, "case_id": plan.case_id, "phase": "4B", "status": "completed",
             "completed_at": datetime.now(timezone.utc).isoformat(),
             "spine_source": "automatic" if spine_model else "supplied",
-            "source_convct": "ConvCT.nii.gz" if "ConvCT" in reconstructions else None,
+            "source_convct": next((path.name for name, path in plan.modality_paths if name == "ConvCT"), None),
+            "source_reconstructions": {name: path.name for name, path in plan.modality_paths},
             "source_segmentation": plan.spine_segmentation.name if segmentation is not None else None,
             "model": _model_provenance(spine_model, SPINE_MODEL) if spine_model else None,
             "lesion_model": _model_provenance(lesion_model, spec),
@@ -188,13 +187,12 @@ def run_lesion_pipeline(plan, validated_inputs, *, installer=None,
             "crop": {"start": list(prepared.crop.start), "stop": list(prepared.crop.stop),
                      "upper_bounds": "exclusive", "padding_voxels": 5, "grid": "reference_ras",
                      "original_shape": list(prepared.crop.original_shape)},
-            "labelled_output": "spine/spine_labelled.nii.gz", "binary_output": "spine/spine_binary.nii.gz",
-            "lesion_output": "lesion/lesion_labelled.nii.gz", "lesion_inference": "completed",
+            **paths, "lesion_inference": "completed",
         }
         with (stage / "run.json").open("x", encoding="utf-8") as stream:
             json.dump(manifest, stream, indent=2)
         try:
-            _publish_directory(stage, destination)
+            destination = publish_case_run(stage, output, plan.case_id, _publish_directory)
         except InstallationError as error:
             raise LesionInferenceError("Cannot publish lesion run: {}. Existing results were preserved; use a filesystem supporting atomic no-clobber directory rename.".format(error)) from error
     return destination

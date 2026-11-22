@@ -4,7 +4,8 @@
 
 V3 is independent of the existing V1 TCIA/DICOM and V2 NIfTI workflows.
 **Spine-only and end-to-end benchmark lesion execution are implemented.**
-This research preview has not been validated with real-model GPU inference.
+End-to-end models 802 and 710 were validated on real RAS and LPS inputs on
+Linux with an RTX 5080.
 `--skip_lesion_segmentation` executes the spine workflow and exits **0** only
 after publishing a validated completed run. `--lesion_model 700–718` executes
 spine preparation and the selected five-fold lesion model, also exiting **0**
@@ -39,6 +40,35 @@ are `ConvCT.nii.gz`, `VMI_40.nii.gz`, `VMI_80.nii.gz`, `VMI_120.nii.gz`,
 `CaSupp_100.nii.gz`. Only selected-model reconstructions are required, plus
 ConvCT when no spine segmentation is supplied. Discovery is not recursive;
 unrelated files are ignored. Sources are never modified.
+
+Alternatively, provide the original NIfTI paths directly. Both `.nii` and
+`.nii.gz` are accepted. Do not combine explicit paths with `--input_dir`.
+Each explicit modality may be specified once. Unused explicit modality options
+are rejected.
+
+```bash
+uv run spinal-run-nnunet-benchmark-prediction \
+  --case_id Myel_001 --output_dir /data/results --lesion_model 710 \
+  --path_to_convCT_nifti /data/original/Myel_001_conv.nii.gz \
+  --path_to_VMI40_nifti /data/original/Myel_001_monoe_40kev.nii.gz
+```
+
+| Reconstruction | Explicit option |
+|---|---|
+| ConvCT | `--path_to_convCT_nifti` |
+| VMI_40 | `--path_to_VMI40_nifti` |
+| VMI_80 | `--path_to_VMI80_nifti` |
+| VMI_120 | `--path_to_VMI120_nifti` |
+| CaSupp_25 | `--path_to_CaSupp25_nifti` |
+| CaSupp_50 | `--path_to_CaSupp50_nifti` |
+| CaSupp_75 | `--path_to_CaSupp75_nifti` |
+| CaSupp_100 | `--path_to_CaSupp100_nifti` |
+
+With `--input_dir`, the folder name is the default case ID. Supply `--case_id`
+to override it or to identify a run using explicit paths. An ID has 1–80 ASCII
+letters, digits, underscores or hyphens and starts with a letter or digit.
+Reserved device names are rejected. Case IDs appear in output paths and
+filenames.
 
 The registry is authoritative for exact channel order. The required lesion
 reconstructions are listed below; a binary spine mask is appended as the **last
@@ -153,31 +183,33 @@ tolerance. Integer arrays, including uint64 spine labels above `2**53`, are
 validated without converting them to floating point. Prediction-domain checks
 use each model's allowed labels, separately from geometry tolerance.
 
-Complete lesion runs have this structure:
+A completed lesion run for `Myel_001` has this structure:
 
 ```text
-<output_dir>/run-<unique-id>/
+<output_dir>/Myel_001_output/
   run.json
-  spine/
-    spine_labelled.nii.gz
-    spine_binary.nii.gz
-    spine_supplied.nii.gz     # supplied mode only, byte-identical source copy
-  lesion/
-    lesion_labelled.nii.gz
+  Segmentation/
+    Spine_segmentation_final/
+      Myel_001_spine_segmentation.nii.gz
+      Myel_001_spine_binary.nii.gz
+      Myel_001_spine_supplied.nii.gz  # supplied mode only, retains .nii or .nii.gz
+    Lesion_segmentation_final/
+      Myel_001_lesions_segmentation.nii.gz
 ```
 
-The entire run stays in a unique private staging directory until both stages,
-reconstruction, validated NIfTI writing, and the manifest complete. A failed
-spine/lesion prediction, reconstruction, or publication exposes no completed run;
-owned temporary channels and prediction files are cleaned. Existing results are
-preserved. Completed runs contain no cropped channels or nnU-Net working files.
-Phase 4B manifests use schema version 2 and record lesion ID/name, trainer/plans/
-configuration, folds/checkpoint, model verification/artifact provenance, spine
-source and model-802 provenance, requested/effective split, input modalities,
-ordered channels, exclusive crop bounds/padding, reference/cropped/output
-geometries, relative output paths, completion time/status, and lesion completion.
-No absolute patient paths or voxel data are included. Spine-only manifests retain
-the Phase 4A schema version 1 and existing output contract.
+The run stays in private staging until both stages, output validation and the
+manifest complete. Publication is atomic. If `Myel_001_output` already exists
+or another process wins the publication race, the run is published under
+`Myel_001_output-<unique-id>`. Completed runs and older V3 layouts stay in place.
+Working CT images and intermediate predictions are removed before publication.
+The supplied-spine copy is byte-identical to the source.
+
+Schema 4 of `run.json` records the case ID, original source basenames, relative
+output paths, verified model provenance, folds, channels, crop, split and
+orientation transforms. The final spine and lesion filenames match V1/V2.
+The legacy DICOM viewer still expects its own flat `<segmentations>/<case>/`
+layout. For direct inspection, overlay the final NIfTI masks on the original
+reference image in a NIfTI viewer.
 
 ### Scientific reproducibility review
 
@@ -298,16 +330,8 @@ mask is the spine-only reference. Compatible supplied voxel labels are copied
 by index onto the chosen reference grid without resampling; the original source
 is also preserved byte-for-byte.
 
-Completed runs are published atomically in unique directories:
-
-```text
-<output_dir>/run-<unique-id>/
-  run.json
-  spine/
-    spine_labelled.nii.gz
-    spine_binary.nii.gz
-    spine_supplied.nii.gz    # supplied mode only, byte-identical source copy
-```
+Spine-only runs use the same case directory and spine filenames shown above,
+with no lesion directory. The manifest records the final relative paths.
 
 `run.json` records completion status/time, automatic/supplied provenance, source
 filenames (without absolute patient paths), requested/effective split and any
@@ -536,17 +560,19 @@ uv export --locked --format requirements-txt --no-hashes --no-emit-project -o re
 
 #### V3 quick start
 
-Put `ConvCT.nii.gz` and `VMI_40.nii.gz` in a per-case input folder for model 710.
-Use the original NIfTI files with their original orientation. If needed, create
-links or copies with these names in a separate input folder. V3 reorients each
-required image internally and publishes masks in the original reference grid.
+For model 710, pass the original ConvCT and VMI40 files directly or use a
+per-case input folder containing `ConvCT.nii.gz` and `VMI_40.nii.gz`. V3
+reorients each required image internally and publishes masks in the original
+reference grid.
 Choose model IDs 700–718 according to the reconstructions listed in the
 [V3 model table](#v3-benchmark-prediction--phase-4b-end-to-end-spine-and-lesions).
 
 ```bash
 # Automatic spine (802) and lesions (710), authorizing model installation if missing.
 uv run spinal-run-nnunet-benchmark-prediction \
-  --input_dir /data/case --output_dir /data/results \
+  --path_to_convCT_nifti /data/original/Myel_001_conv.nii.gz \
+  --path_to_VMI40_nifti /data/original/Myel_001_monoe_40kev.nii.gz \
+  --case_id Myel_001 --output_dir /data/results \
   --lesion_model 710 --split True --install_models
 
 # Spine only, reusing an installed model.
@@ -563,7 +589,7 @@ Use `--cache_dir /data/models` to share a V3 model cache across runs. Omit
 `--install_models` for offline reuse of verified cached models. Add
 `--validate_only` to check inputs and alignment without prediction. Successful
 validation-only execution exits with code 3. Each successful prediction publishes
-a new `run-…` directory containing the final masks and `run.json`.
+a new case output directory containing the final masks and `run.json`.
 
 ## Path Configuration
 V1, V2 and the viewer accept explicit CLI paths or defaults from `config.py`. The installed nnU-Net dependency supplies imports even when the legacy `NNUNET_REPO_PATH` points to a missing checkout. Point the legacy prediction commands at the appropriate separately installed legacy model directory. V3 uses its command-line paths and model cache.
