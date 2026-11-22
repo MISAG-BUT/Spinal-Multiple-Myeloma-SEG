@@ -10,7 +10,7 @@ import tempfile
 import unittest
 from unittest.mock import patch
 
-from benchmark_model_registry import LESION_MODELS, SPINE_MODEL, get_model, get_lesion_model
+from utils.benchmark.model_registry import LESION_MODELS, SPINE_MODEL, get_model, get_lesion_model
 from run_prediction_of_nnUNet_benchmark_models import cli, parse_arguments
 
 
@@ -193,7 +193,7 @@ class CliTests(unittest.TestCase):
         sentinel.write_bytes(b"prior result")
         before = {str(p.relative_to(self.root)): p.read_bytes() for p in self.root.rglob("*") if p.is_file()}
         stdout, stderr = io.StringIO(), io.StringIO()
-        with patch("benchmark_nifti.validate_plan_inputs", return_value=({}, None, None)), patch("socket.socket", side_effect=AssertionError("network forbidden")), contextlib.redirect_stdout(stdout), contextlib.redirect_stderr(stderr):
+        with patch("utils.benchmark.nifti.validate_plan_inputs", return_value=({}, None, None)), patch("socket.socket", side_effect=AssertionError("network forbidden")), contextlib.redirect_stdout(stdout), contextlib.redirect_stderr(stderr):
             self.assertEqual(cli(self.base + self.supplied(710) + ["--validate_only"]), 3)
         self.assertIn("model 802 bypassed", stdout.getvalue())
         self.assertIn("mask_spine", stdout.getvalue())
@@ -221,8 +221,8 @@ class PackagingTests(unittest.TestCase):
             "spinal-run-nnunet-benchmark-prediction": "run_prediction_of_nnUNet_benchmark_models:cli",
         }.items():
             self.assertIn('{} = "{}"'.format(command, target), text)
-        for module in ("benchmark_model_registry", "run_prediction_of_nnUNet_benchmark_models"):
-            self.assertIn('"{}",'.format(module), text)
+        self.assertIn('"run_prediction_of_nnUNet_benchmark_models",', text)
+        self.assertIn('packages = ["utils", "utils.benchmark"]', text)
 
 
 
@@ -243,7 +243,7 @@ class ExplicitInputTests(unittest.TestCase):
             self.files[name] = path
 
     def test_explicit_required_modalities_follow_all_registry_models(self):
-        from benchmark_model_registry import LESION_MODELS
+        from utils.benchmark.model_registry import LESION_MODELS
         for model_id, model in LESION_MODELS.items():
             for supplied in (True, False):
                 with self.subTest(model=model_id, supplied=supplied):
@@ -276,7 +276,7 @@ class ExplicitInputTests(unittest.TestCase):
             validate_arguments(build_parser().parse_args(arguments[2:] + conv))
 
     def test_prepared_channels_all_models_and_invalid_prefix_files(self):
-        from benchmark_model_registry import LESION_MODELS
+        from utils.benchmark.model_registry import LESION_MODELS
         from run_prediction_of_nnUNet_benchmark_models import build_parser, validate_arguments
         for model_id, spec in LESION_MODELS.items():
             with self.subTest(model=model_id):

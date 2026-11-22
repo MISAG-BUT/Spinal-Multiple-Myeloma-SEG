@@ -223,7 +223,7 @@ spinal-run-nnunet-benchmark-prediction \
   --spine_segmentation /data/masks/spine.nii.gz --lesion_model 718 --validate_only
 ```
 
-`benchmark_lesion_inference.py` reuses the Phase 4A spine adapter or the supplied
+`utils/benchmark/lesion_inference.py` reuses the Phase 4A spine adapter or the supplied
 labels, converts nonzero spine labels to binary, and uses the existing common
 five-voxel padded crop. Crop bounds are clipped to the original image dimensions
 and stored with exclusive upper bounds. Ordered channel files are constructed
@@ -420,7 +420,7 @@ Expected publication failures are reported without a traceback using exit code
 5, including native filesystem errors raised by the shared installation helper;
 they are not misclassified as model-resolution errors (code 4).
 
-`benchmark_model_installation.ModelInstaller(cache_dir).resolve(id)` also provides
+`utils.benchmark.model_installation.ModelInstaller(cache_dir).resolve(id)` also provides
 the installation API; `resolve_plan(plan)` resolves only the plan's required
 models. It uses registry metadata, streams HTTPS downloads into `.part` files,
 restarts interrupted transfers from zero with bounded retries, and checks the
@@ -470,7 +470,7 @@ the required reconstruction grid. Probabilistic masks are rejected. All nonzero
 labels become 1 in a separate uint8 binary mask; original labels and source files
 remain unchanged. Supplied-mask model 710 still needs only VMI_40, without ConvCT.
 
-`benchmark_nifti.py` implements in-memory binary-mask preparation, a common
+`utils/benchmark/nifti.py` implements in-memory binary-mask preparation, a common
 five-voxel padded bounding box (clipped to boundaries, exclusive Python slice
 upper bounds), and ordered model-specific channel preparation. The binary spine
 mask is always last. Cropped affines are translated by the crop start so that
@@ -1003,7 +1003,7 @@ Notes on Multiprocessing
 ------------------------
 - By default, the pipeline is configured for **Linux** and may use multiprocessing during nnU-Net inference.
 - On **Windows**, Python multiprocessing can occasionally fail when running from a clean session.
-- If inference fails on Windows, open `utils.py` and modify the function `run_nnunet_inference` to use **variant 2** (`predict_from_files_sequential`), which disables multiprocessing.
+- If inference fails on Windows, open `utils/legacy.py` and modify the function `run_nnunet_inference` to use **variant 2** (`predict_from_files_sequential`), which disables multiprocessing.
 - This variant is slower but ensures safe and stable execution on Windows systems.
 ---
 

@@ -14,8 +14,8 @@ from unittest.mock import patch
 import urllib.error
 import zipfile
 
-from benchmark_model_registry import get_model
-from benchmark_model_installation import (
+from utils.benchmark.model_registry import get_model
+from utils.benchmark.model_installation import (
     InstallationError, ModelInstaller, RECEIPT, default_cache_dir,
     extract_model, validate_model, verify_archive, _HttpsRedirects,
     _safe_member, _publish_directory, _publish_archive,
@@ -137,7 +137,7 @@ class InstallationTests(unittest.TestCase):
         def race(source, target):
             target.mkdir()
             return real_publish(source, target)
-        with patch("benchmark_model_installation.get_model", return_value=spec), patch("benchmark_model_installation._publish_directory", side_effect=race):
+        with patch("utils.benchmark.model_installation.get_model", return_value=spec), patch("utils.benchmark.model_installation._publish_directory", side_effect=race):
             with self.assertRaises(FileExistsError):
                 installer.resolve(710)
         self.assertTrue(destination.is_dir())
@@ -146,7 +146,7 @@ class InstallationTests(unittest.TestCase):
         self.assertFalse(list((installer.root / "locks").iterdir()))
         # A failed native publish leaves no ready installation.
         other = ModelInstaller(self.root / "other-cache", opener=lambda *a, **k: Response(data), progress=lambda *a: None)
-        with patch("benchmark_model_installation.get_model", return_value=spec), patch("benchmark_model_installation._publish_directory", side_effect=InstallationError("unsupported filesystem")):
+        with patch("utils.benchmark.model_installation.get_model", return_value=spec), patch("utils.benchmark.model_installation._publish_directory", side_effect=InstallationError("unsupported filesystem")):
             with self.assertRaisesRegex(InstallationError, "unsupported filesystem"):
                 other.resolve(710)
         self.assertFalse((other.root / "models" / str(spec.zenodo_record_id) / spec.dataset_name).exists())
@@ -167,7 +167,7 @@ class InstallationTests(unittest.TestCase):
                 results.append(installer.resolve(model))
             except Exception as error:
                 errors.append(error)
-        with patch("benchmark_model_installation.get_model", side_effect=specs.__getitem__):
+        with patch("utils.benchmark.model_installation.get_model", side_effect=specs.__getitem__):
             threads = [threading.Thread(target=work, args=(installer, model)) for installer, model in zip(installers, specs)]
             for thread in threads:
                 thread.start()
@@ -196,24 +196,24 @@ class InstallationTests(unittest.TestCase):
         ):
             operation = Mock(return_value=0)
             library = SimpleNamespace(**{function: operation})
-            with self.subTest(platform=platform), patch("benchmark_model_installation.os.name", "posix"), patch("benchmark_model_installation.sys.platform", platform), patch("benchmark_model_installation.ctypes.CDLL", return_value=library):
+            with self.subTest(platform=platform), patch("utils.benchmark.model_installation.os.name", "posix"), patch("utils.benchmark.model_installation.sys.platform", platform), patch("utils.benchmark.model_installation.ctypes.CDLL", return_value=library):
                 _publish_directory(source, destination)
                 operation.assert_called_once_with(*arguments)
                 operation.return_value = -1
-                with patch("benchmark_model_installation.ctypes.get_errno", return_value=errno.EEXIST):
+                with patch("utils.benchmark.model_installation.ctypes.get_errno", return_value=errno.EEXIST):
                     with self.assertRaises(FileExistsError):
                         _publish_directory(source, destination)
-                with patch("benchmark_model_installation.ctypes.get_errno", return_value=errno.ENOSYS):
+                with patch("utils.benchmark.model_installation.ctypes.get_errno", return_value=errno.ENOSYS):
                     with self.assertRaisesRegex(InstallationError, "Atomic no-clobber"):
                         _publish_directory(source, destination)
-        with patch("benchmark_model_installation.os.name", "posix"), patch("benchmark_model_installation.__file__", str(self.root / "site-packages" / "benchmark_model_installation.py")), patch("benchmark_model_installation.sys.platform", "linux"), patch("benchmark_model_installation.ctypes.CDLL", return_value=SimpleNamespace()):
+        with patch("utils.benchmark.model_installation.os.name", "posix"), patch("utils.benchmark.model_installation.__file__", str(self.root / "site-packages" / "utils" / "benchmark" / "model_installation.py")), patch("utils.benchmark.model_installation.sys.platform", "linux"), patch("utils.benchmark.model_installation.ctypes.CDLL", return_value=SimpleNamespace()):
             with self.assertRaisesRegex(InstallationError, "unavailable"):
                 _publish_directory(source, destination)
 
     def test_install_cache_reuse_and_provenance(self):
         spec, data = fixture()
         installer = self.installer(data)
-        with patch("benchmark_model_installation.get_model", return_value=spec):
+        with patch("utils.benchmark.model_installation.get_model", return_value=spec):
             first = installer.resolve(710)
             self.assertIn("19708429", str(first.model_directory))
             self.assertEqual(first.provenance["artifact"]["archive_md5"], spec.md5)
@@ -235,7 +235,7 @@ class InstallationTests(unittest.TestCase):
     def test_spine_selective_extraction_and_external_read_only(self):
         spec, data = fixture(802, extra=(("Spinal-Multiple-Myeloma-SEG_nnUNet_models/Dataset800_other/checkpoint.pth", b"unrelated"),))
         installer = self.installer(data)
-        with patch("benchmark_model_installation.get_model", return_value=spec):
+        with patch("utils.benchmark.model_installation.get_model", return_value=spec):
             resolved = installer.resolve(802)
             self.assertTrue((resolved.model_directory / "fold_all/checkpoint_final.pth").exists())
             self.assertFalse(list(installer.root.rglob("Dataset800*")))
@@ -284,7 +284,7 @@ class InstallationTests(unittest.TestCase):
         spec, data = fixture()
         installer = self.installer(data)
         installer.opener = Mock(side_effect=lambda *a, **k: Response(data))
-        with patch("benchmark_model_installation.os.link", side_effect=OSError("unsupported hard links")) as link:
+        with patch("utils.benchmark.model_installation.os.link", side_effect=OSError("unsupported hard links")) as link:
             archive = installer._download(spec)
         link.assert_not_called()
         installer.opener.assert_called_once()
@@ -292,7 +292,7 @@ class InstallationTests(unittest.TestCase):
         self.assertFalse(list(archive.parent.glob("*.part")))
 
     def test_archive_destination_collision_validates_without_overwrite(self):
-        from benchmark_model_installation import _rename_no_clobber
+        from utils.benchmark.model_installation import _rename_no_clobber
         spec, data = fixture()
         for existing in (data, b"invalid destination"):
             with self.subTest(valid=existing == data):
@@ -311,7 +311,7 @@ class InstallationTests(unittest.TestCase):
         def race(part, archive):
             archive.write_bytes(data)
             _rename_no_clobber(part, archive)
-        with patch("benchmark_model_installation._rename_no_clobber", side_effect=race):
+        with patch("utils.benchmark.model_installation._rename_no_clobber", side_effect=race):
             archive = installer._download(spec)
         self.assertEqual(archive.read_bytes(), data)
         self.assertFalse(list(archive.parent.glob("*.part")))
@@ -326,7 +326,7 @@ class InstallationTests(unittest.TestCase):
             with self.subTest(error=error):
                 installer = self.installer(data)
                 installer.opener = Mock(side_effect=lambda *a, **k: Response(data))
-                with patch("benchmark_model_installation._publish_archive", side_effect=error):
+                with patch("utils.benchmark.model_installation._publish_archive", side_effect=error):
                     with self.assertRaisesRegex(InstallationError, "filesystem/publication failure.*not retried"):
                         installer._download(spec)
                 installer.opener.assert_called_once()
@@ -355,7 +355,7 @@ class InstallationTests(unittest.TestCase):
         for bad in (data[:-1], b"X" * len(data)):
             with self.subTest(size=len(bad)):
                 installer = self.installer(bad, retries=2)
-                with patch("benchmark_model_installation._publish_archive") as publish:
+                with patch("utils.benchmark.model_installation._publish_archive") as publish:
                     with self.assertRaises(InstallationError):
                         installer._download(spec)
                 publish.assert_not_called()
@@ -373,7 +373,7 @@ class InstallationTests(unittest.TestCase):
                 results.append(owner._download(spec))
             except Exception as error:
                 failures.append(error)
-        with patch("benchmark_model_installation.os.link", side_effect=OSError("unsupported")):
+        with patch("utils.benchmark.model_installation.os.link", side_effect=OSError("unsupported")):
             threads = [threading.Thread(target=work, args=(owner,)) for owner in (installer, other)]
             for thread in threads:
                 thread.start()
@@ -410,7 +410,7 @@ class InstallationTests(unittest.TestCase):
         from types import SimpleNamespace
         spec, data = fixture()
         installer = self.installer(data)
-        with patch("benchmark_model_installation.shutil.disk_usage", return_value=SimpleNamespace(free=0)):
+        with patch("utils.benchmark.model_installation.shutil.disk_usage", return_value=SimpleNamespace(free=0)):
             with self.assertRaisesRegex(InstallationError, "free space"):
                 installer._download(spec)
         archive = self.root / "plans.zip"
@@ -423,7 +423,7 @@ class InstallationTests(unittest.TestCase):
     def test_failed_installation_never_publishes_model(self):
         spec, data = fixture(missing_fold=True)
         installer = self.installer(data)
-        with patch("benchmark_model_installation.get_model", return_value=spec):
+        with patch("utils.benchmark.model_installation.get_model", return_value=spec):
             with self.assertRaisesRegex(InstallationError, "checkpoint"):
                 installer.resolve(spec.dataset_id)
         self.assertFalse((installer.root / "models" / str(spec.zenodo_record_id) / spec.dataset_name).exists())
@@ -477,7 +477,7 @@ class InstallationTests(unittest.TestCase):
         dataset = installer._directory("models", spec.zenodo_record_id, spec.dataset_name)
         sentinel = dataset / "unrelated.txt"
         sentinel.write_text("keep")
-        with patch("benchmark_model_installation.get_model", return_value=spec), self.assertRaises(InstallationError):
+        with patch("utils.benchmark.model_installation.get_model", return_value=spec), self.assertRaises(InstallationError):
             installer.resolve(spec.dataset_id)
         self.assertEqual(sentinel.read_text(), "keep")
 
@@ -503,7 +503,7 @@ class InstallationTests(unittest.TestCase):
                 results.append(installer.resolve(710))
             except Exception as error:
                 failures.append(error)
-        with patch("benchmark_model_installation.get_model", return_value=spec):
+        with patch("utils.benchmark.model_installation.get_model", return_value=spec):
             threads = [threading.Thread(target=work) for _ in range(2)]
             for thread in threads:
                 thread.start()
@@ -526,7 +526,7 @@ class InstallationTests(unittest.TestCase):
             self.assertEqual(installer.resolve_plan(supplied), {})
 
     def test_project_cache_priority(self):
-        from benchmark_model_installation import cache_location
+        from utils.benchmark.model_installation import cache_location
         with patch("config.V3_MODEL_CACHE_DIR", None):
             root = Path(__file__).resolve().parents[1]
             self.assertEqual(cache_location(), (root / "Model_cache", "project"))
@@ -538,9 +538,9 @@ class InstallationTests(unittest.TestCase):
                 cache_location()
 
     def test_platform_defaults_and_https_downgrade(self):
-        with patch("benchmark_model_installation.__file__", str(self.root / "site-packages" / "benchmark_model_installation.py")), patch("benchmark_model_installation.sys.platform", "win32"), patch.dict(os.environ, {"LOCALAPPDATA": str(self.root)}):
+        with patch("utils.benchmark.model_installation.__file__", str(self.root / "site-packages" / "utils" / "benchmark" / "model_installation.py")), patch("utils.benchmark.model_installation.sys.platform", "win32"), patch.dict(os.environ, {"LOCALAPPDATA": str(self.root)}):
             self.assertEqual(default_cache_dir(), self.root / "SpinalMultipleMyelomaSEG")
-        with patch("benchmark_model_installation.__file__", str(self.root / "site-packages" / "benchmark_model_installation.py")), patch("benchmark_model_installation.sys.platform", "linux"), patch.dict(os.environ, {"XDG_CACHE_HOME": str(self.root)}):
+        with patch("utils.benchmark.model_installation.__file__", str(self.root / "site-packages" / "utils" / "benchmark" / "model_installation.py")), patch("utils.benchmark.model_installation.sys.platform", "linux"), patch.dict(os.environ, {"XDG_CACHE_HOME": str(self.root)}):
             self.assertEqual(default_cache_dir(), self.root / "spinal-multiple-myeloma-seg")
         with self.assertRaisesRegex(InstallationError, "insecure"):
             _HttpsRedirects().redirect_request(None, None, 302, "", {}, "http://insecure.test")

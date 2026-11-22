@@ -13,7 +13,7 @@ import re
 import sys
 from typing import Optional, Tuple
 
-from benchmark_model_registry import LESION_MODELS, ModelSpec, get_lesion_model, get_model
+from utils.benchmark.model_registry import LESION_MODELS, ModelSpec, get_lesion_model, get_model
 
 
 MODALITY_OPTIONS = {
@@ -250,17 +250,17 @@ def cli(argv=None):
             _show_model(get_model(model_id), not plan.list_models)
         return 0
     try:
-        from benchmark_model_installation import cache_location
+        from utils.benchmark.model_installation import cache_location
         cache, source = cache_location(plan.cache_dir)
-        from benchmark_nifti import case_output_paths, validate_plan_inputs
+        from utils.benchmark.nifti import case_output_paths, validate_plan_inputs
         validated_inputs = validate_plan_inputs(plan)
         if plan.lesion_model is None:
-            from benchmark_spine_inference import validate_spine_inputs
+            from utils.benchmark.spine_inference import validate_spine_inputs
             validated_inputs = validate_spine_inputs(plan, validated_inputs)
         else:
             _, segmentation, _ = validated_inputs
             if segmentation is not None:
-                from benchmark_spine_inference import validate_labels
+                from utils.benchmark.spine_inference import validate_labels
                 validate_labels(segmentation)
     except (ValueError, OSError) as error:
         print("V3 input validation failed: {}".format(error), file=sys.stderr)
@@ -301,8 +301,8 @@ def cli(argv=None):
         print("Validation only: no installation, inference, or output creation was attempted.")
         return 3
     if plan.lesion_model is None:
-        from benchmark_spine_inference import run_spine_only, SpineInferenceError
-        from benchmark_model_installation import InstallationError
+        from utils.benchmark.spine_inference import run_spine_only, SpineInferenceError
+        from utils.benchmark.model_installation import InstallationError
         try:
             result = run_spine_only(plan, validated_inputs)
         except InstallationError as error:
@@ -316,9 +316,9 @@ def cli(argv=None):
         print("Spine segmentation completed: {}".format(result / case_output_paths(plan)["labelled_output"]))
         print("Run manifest: {}".format(result / "run.json"))
         return 0
-    from benchmark_lesion_inference import run_lesion_pipeline, LesionInferenceError
-    from benchmark_spine_inference import SpineInferenceError
-    from benchmark_model_installation import InstallationError
+    from utils.benchmark.lesion_inference import run_lesion_pipeline, LesionInferenceError
+    from utils.benchmark.spine_inference import SpineInferenceError
+    from utils.benchmark.model_installation import InstallationError
     try:
         result = run_lesion_pipeline(plan, validated_inputs)
     except InstallationError as error:

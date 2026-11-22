@@ -13,9 +13,9 @@ import tempfile
 import nibabel as nib
 import numpy as np
 
-from benchmark_model_registry import SPINE_MODEL
-from benchmark_model_installation import ModelInstaller, InstallationError, _publish_directory
-from benchmark_nifti import (
+from .model_registry import SPINE_MODEL
+from .model_installation import ModelInstaller, InstallationError, _publish_directory
+from .nifti import (
     Crop, _new_image, binary_spine_mask, compare_geometry, crop_image,
     load_nifti, save_nifti_no_clobber, validate_image, image_on_reference_grid, image_geometry,
     validate_label_values, case_output_paths, publish_case_run, retain_intermediates, run_settings,

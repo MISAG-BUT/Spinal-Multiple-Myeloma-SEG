@@ -26,7 +26,7 @@ import urllib.request
 from urllib.parse import urlparse
 import zipfile
 
-from benchmark_model_registry import get_model
+from .model_registry import get_model
 
 
 CHUNK_SIZE = 1024 * 1024
@@ -75,7 +75,7 @@ def cache_location(override=None):
         if not path.is_absolute():
             raise ValueError("V3_MODEL_CACHE_DIR must be an absolute path")
         return path, "config"
-    root = Path(__file__).resolve().parent
+    root = Path(__file__).resolve().parents[2]
     if ((root / "pyproject.toml").is_file() and (root / "config.py").is_file()
             and (root / "run_prediction_of_nnUNet_benchmark_models.py").is_file()
             and not {"site-packages", "dist-packages", ".venv"}.intersection(root.parts)):

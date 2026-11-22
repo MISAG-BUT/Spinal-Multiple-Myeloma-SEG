@@ -43,7 +43,7 @@ setup_nnunet_env()
 # ----------------------------------------------------------
 # Project-specific imports
 # ----------------------------------------------------------
-from utils import find_dicom_series, select_dicom_series_group, load_DICOM_data_SITK
+from utils.legacy import find_dicom_series, select_dicom_series_group, load_DICOM_data_SITK
 import SimpleITK as sitk
 import pydicom
 import napari

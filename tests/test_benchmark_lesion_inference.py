@@ -16,13 +16,13 @@ from unittest.mock import Mock, patch
 import nibabel as nib
 import numpy as np
 
-from benchmark_model_registry import get_model, get_lesion_model, LESION_MODELS
-from benchmark_model_installation import InstallationError, ModelInstaller, ResolvedModel
-from benchmark_nifti import (
+from utils.benchmark.model_registry import get_model, get_lesion_model, LESION_MODELS
+from utils.benchmark.model_installation import InstallationError, ModelInstaller, ResolvedModel
+from utils.benchmark.nifti import (
     _new_image, compare_geometry, load_nifti, prepare_lesion_channels, validate_plan_inputs,
     validate_label_values, binary_spine_mask, reconstruct_lesions,
 )
-from benchmark_lesion_inference import (
+from utils.benchmark.lesion_inference import (
     LesionInferenceError, infer_lesions, lesion_model_metadata, run_lesion_pipeline,
     validate_lesion_prediction,
 )
@@ -408,7 +408,7 @@ class LesionTests(unittest.TestCase):
         fixture_spec = replace(spec, zip_size=len(content), md5=hashlib.md5(content).hexdigest())
         opener = Mock(side_effect=lambda *args, **kwargs: Response(content))
         installer = ModelInstaller(self.root / "cache", opener=opener, progress=lambda *args: None)
-        with patch("benchmark_model_installation.get_model", return_value=fixture_spec):
+        with patch("utils.benchmark.model_installation.get_model", return_value=fixture_spec):
             result, _ = self.run_pipeline(plan, installer=installer)
             opener.assert_called_once_with(fixture_spec.download_url, timeout=60)
             opener.side_effect = AssertionError("network forbidden on reuse")
@@ -423,7 +423,7 @@ class LesionTests(unittest.TestCase):
         plan = self.plan(710)
         for function, error in (("reconstruct_lesions", ValueError("mock reconstruction failure")),
                                 ("save_nifti_no_clobber", OSError("mock output write failure"))):
-            with self.subTest(function=function), patch("benchmark_lesion_inference." + function, side_effect=error), patch("benchmark_lesion_inference._publish_directory") as publish:
+            with self.subTest(function=function), patch("utils.benchmark.lesion_inference." + function, side_effect=error), patch("utils.benchmark.lesion_inference._publish_directory") as publish:
                 with self.assertRaisesRegex((ValueError, OSError), "mock"):
                     self.run_pipeline(plan)
                 publish.assert_not_called()
@@ -464,11 +464,11 @@ class LesionTests(unittest.TestCase):
         self.assertEqual(list(self.output.iterdir()), [])
 
     def test_missing_inference_dependencies_return_clear_cli_failure(self):
-        from benchmark_spine_inference import SpineInferenceError
+        from utils.benchmark.spine_inference import SpineInferenceError
         self.plan(710)
         args = ["--input_dir", str(self.inputs), "--output_dir", str(self.output), "--lesion_model", "710", "--spine_segmentation", str(self.mask_path)]
         error = io.StringIO()
-        with patch("benchmark_lesion_inference.ModelInstaller", return_value=self.installer()), patch("benchmark_lesion_inference.create_predictor", side_effect=SpineInferenceError("Install nnunetv2==2.6.4 and CUDA-enabled PyTorch")) as create, contextlib.redirect_stdout(io.StringIO()), contextlib.redirect_stderr(error):
+        with patch("utils.benchmark.lesion_inference.ModelInstaller", return_value=self.installer()), patch("utils.benchmark.lesion_inference.create_predictor", side_effect=SpineInferenceError("Install nnunetv2==2.6.4 and CUDA-enabled PyTorch")) as create, contextlib.redirect_stdout(io.StringIO()), contextlib.redirect_stderr(error):
             self.assertEqual(cli(args), 5)
         create.assert_called_once_with(inference_name="Benchmark lesion inference")
         self.assertIn("nnunetv2==2.6.4", error.getvalue())
@@ -559,12 +559,12 @@ class LesionTests(unittest.TestCase):
         self.output.mkdir()
         sentinel = self.output / "old_result.txt"
         sentinel.write_bytes(b"old result")
-        from benchmark_model_installation import _publish_directory
+        from utils.benchmark.model_installation import _publish_directory
         def collide(stage, destination):
             destination.mkdir()
             (destination / "sentinel").write_bytes(b"existing run")
             return _publish_directory(stage, destination)
-        with patch("benchmark_lesion_inference._publish_directory", side_effect=collide), self.assertRaises(FileExistsError):
+        with patch("utils.benchmark.lesion_inference._publish_directory", side_effect=collide), self.assertRaises(FileExistsError):
             self.run_pipeline(plan)
         self.assertEqual(sentinel.read_bytes(), b"old result")
         self.assertFalse(list(self.output.glob(".v3-*")))
@@ -595,16 +595,16 @@ class LesionTests(unittest.TestCase):
         plan = self.plan(710)
         args = ["--input_dir", str(self.inputs), "--output_dir", str(self.output), "--lesion_model", "710", "--spine_segmentation", str(self.mask_path)]
         installer = self.installer()
-        with patch("benchmark_lesion_inference.ModelInstaller", return_value=installer), patch("benchmark_lesion_inference.create_lesion_predictor", return_value=LesionPredictor(plan.lesion_model)), contextlib.redirect_stdout(io.StringIO()), contextlib.redirect_stderr(io.StringIO()):
+        with patch("utils.benchmark.lesion_inference.ModelInstaller", return_value=installer), patch("utils.benchmark.lesion_inference.create_lesion_predictor", return_value=LesionPredictor(plan.lesion_model)), contextlib.redirect_stdout(io.StringIO()), contextlib.redirect_stderr(io.StringIO()):
             self.assertEqual(cli(args), 0)
             installer.resolve.side_effect = InstallationError("missing model; use --install_models")
             self.assertEqual(cli(args), 4)
-            with patch("benchmark_lesion_inference.ModelInstaller", side_effect=OSError("cache permission denied")):
+            with patch("utils.benchmark.lesion_inference.ModelInstaller", side_effect=OSError("cache permission denied")):
                 self.assertEqual(cli(args), 4)
             installer.resolve.side_effect = lambda dataset_id, **kwargs: self.model(dataset_id)
-            with patch("benchmark_lesion_inference.create_lesion_predictor", return_value=LesionPredictor(plan.lesion_model, fail=True)):
+            with patch("utils.benchmark.lesion_inference.create_lesion_predictor", return_value=LesionPredictor(plan.lesion_model, fail=True)):
                 self.assertEqual(cli(args), 5)
-            with patch("benchmark_lesion_inference._publish_directory", side_effect=InstallationError("native rename unavailable")):
+            with patch("utils.benchmark.lesion_inference._publish_directory", side_effect=InstallationError("native rename unavailable")):
                 error = io.StringIO()
                 with contextlib.redirect_stderr(error):
                     self.assertEqual(cli(args), 5)
@@ -663,14 +663,14 @@ sys.exit(cli(sys.argv[1:]))
         self.assertEqual(int(np.asanyarray(output.dataobj).sum()), 2)
 
     def test_large_integer_validation_never_rounds_and_checks_allowed_values_exactly(self):
-        from benchmark_spine_inference import validate_labels
+        from utils.benchmark.spine_inference import validate_labels
         data = np.zeros(self.reference.shape, np.uint64)
         data[0, 0, 0] = 2**53 + 1
         data[-1, -1, -1] = np.iinfo(np.uint64).max
         segmentation = _new_image(data, self.reference, self.reference.affine)
         # np.rint(uint64) would allocate lossy float64. Integer validation must
         # not invoke it, even for the largest exactly represented integer label.
-        with patch("benchmark_nifti.np.rint", side_effect=AssertionError("lossy rounding forbidden")):
+        with patch("utils.benchmark.nifti.np.rint", side_effect=AssertionError("lossy rounding forbidden")):
             validate_labels(segmentation, allowed_labels={0, 2**53 + 1, 2**64 - 1})
             binary = binary_spine_mask(segmentation)
         self.assertEqual(int(binary.get_fdata().sum()), 2)
@@ -716,7 +716,7 @@ sys.exit(cli(sys.argv[1:]))
                 error = io.StringIO()
                 factory = Mock(side_effect=AssertionError("preflight must precede construction"))
                 try:
-                    with patch("benchmark_lesion_inference.ModelInstaller", return_value=installer), patch("benchmark_lesion_inference.create_lesion_predictor", factory), contextlib.redirect_stdout(io.StringIO()), contextlib.redirect_stderr(error):
+                    with patch("utils.benchmark.lesion_inference.ModelInstaller", return_value=installer), patch("utils.benchmark.lesion_inference.create_lesion_predictor", factory), contextlib.redirect_stdout(io.StringIO()), contextlib.redirect_stderr(error):
                         self.assertEqual(cli(args), 4)
                     factory.assert_not_called()
                     self.assertFalse(self.output.exists())
@@ -767,18 +767,18 @@ sys.exit(cli(sys.argv[1:]))
                         def fail_manifest(value, stream, **kwargs):
                             stream.write('{"status":"completed"')
                             raise OSError("manifest write failed")
-                        stack.enter_context(patch("benchmark_lesion_inference." + function, side_effect=fail_manifest))
+                        stack.enter_context(patch("utils.benchmark.lesion_inference." + function, side_effect=fail_manifest))
                     elif case == "collision":
-                        from benchmark_model_installation import _publish_directory
+                        from utils.benchmark.model_installation import _publish_directory
                         def collide(stage, destination):
                             destination.mkdir()
                             (destination / "sentinel").write_bytes(b"existing run")
                             return _publish_directory(stage, destination)
-                        stack.enter_context(patch("benchmark_lesion_inference." + function, side_effect=collide))
+                        stack.enter_context(patch("utils.benchmark.lesion_inference." + function, side_effect=collide))
                     else:
-                        stack.enter_context(patch("benchmark_lesion_inference." + function, side_effect=exception))
-                stack.enter_context(patch("benchmark_lesion_inference.ModelInstaller", return_value=self.installer()))
-                stack.enter_context(patch("benchmark_lesion_inference.create_lesion_predictor", return_value=fake))
+                        stack.enter_context(patch("utils.benchmark.lesion_inference." + function, side_effect=exception))
+                stack.enter_context(patch("utils.benchmark.lesion_inference.ModelInstaller", return_value=self.installer()))
+                stack.enter_context(patch("utils.benchmark.lesion_inference.create_lesion_predictor", return_value=fake))
                 error = io.StringIO()
                 with contextlib.redirect_stdout(io.StringIO()), contextlib.redirect_stderr(error):
                     self.assertEqual(cli(args), 5)
@@ -800,7 +800,7 @@ sys.exit(cli(sys.argv[1:]))
         lesion_factory.assert_not_called()
         self.assertEqual(list(self.output.iterdir()), [])
         error = io.StringIO()
-        with patch("benchmark_lesion_inference.ModelInstaller", return_value=self.installer()), patch("benchmark_spine_inference.create_predictor", return_value=FakePredictor(fail_second=True)), patch("benchmark_lesion_inference.create_lesion_predictor", lesion_factory), contextlib.redirect_stdout(io.StringIO()), contextlib.redirect_stderr(error):
+        with patch("utils.benchmark.lesion_inference.ModelInstaller", return_value=self.installer()), patch("utils.benchmark.spine_inference.create_predictor", return_value=FakePredictor(fail_second=True)), patch("utils.benchmark.lesion_inference.create_lesion_predictor", lesion_factory), contextlib.redirect_stdout(io.StringIO()), contextlib.redirect_stderr(error):
             self.assertEqual(cli(["--input_dir", str(self.inputs), "--output_dir", str(self.output), "--lesion_model", "710"]), 5)
         self.assertNotIn("Traceback", error.getvalue())
         lesion_factory.assert_not_called()
@@ -817,7 +817,7 @@ sys.exit(cli(sys.argv[1:]))
         images = {name: load_nifti(self.inputs / (name + ".nii.gz")) for name in plan.lesion_model.required_modalities}
         with self.assertRaisesRegex(ValueError, "alignment"):
             prepare_lesion_channels(717, images, load_nifti(self.mask_path))
-        with patch("benchmark_lesion_inference.ModelInstaller", side_effect=AssertionError("validation must precede resolution")), contextlib.redirect_stdout(io.StringIO()), contextlib.redirect_stderr(io.StringIO()):
+        with patch("utils.benchmark.lesion_inference.ModelInstaller", side_effect=AssertionError("validation must precede resolution")), contextlib.redirect_stdout(io.StringIO()), contextlib.redirect_stderr(io.StringIO()):
             self.assertEqual(cli(["--input_dir", str(self.inputs), "--output_dir", str(self.output), "--lesion_model", "717", "--spine_segmentation", str(self.mask_path), "--validate_only"]), 2)
         self.assertEqual(path.read_bytes(), source_bytes)
         self.assertFalse(self.output.exists())

@@ -12,17 +12,17 @@ import tempfile
 
 import numpy as np
 
-from benchmark_model_registry import get_lesion_model, SPINE_MODEL
-from benchmark_model_installation import (
+from .model_registry import get_lesion_model, SPINE_MODEL
+from .model_installation import (
     ModelInstaller, InstallationError, validate_model, _read_json, _publish_directory,
 )
-from benchmark_nifti import (
+from .nifti import (
     binary_spine_mask, compare_geometry, load_nifti, prepare_lesion_channels,
     reconstruct_lesions, save_nifti_no_clobber, save_prepared_channels, image_geometry,
     validate_label_values, case_output_paths, publish_case_run, image_on_reference_grid,
     retain_intermediates, run_settings, spine_source_path,
 )
-from benchmark_spine_inference import (
+from .spine_inference import (
     create_predictor, infer_spine, validate_labels, _label_image,
 )
 

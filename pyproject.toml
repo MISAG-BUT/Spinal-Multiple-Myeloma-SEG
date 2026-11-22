@@ -45,17 +45,12 @@ spinal-run-nnunet-new-prediction = "spinal_mm_cli:run_prediction_new"
 spinal-run-nnunet-benchmark-prediction = "run_prediction_of_nnUNet_benchmark_models:cli"
 
 [tool.setuptools]
+packages = ["utils", "utils.benchmark"]
 py-modules = [
-    "benchmark_lesion_inference",
-    "benchmark_spine_inference",
-    "benchmark_model_installation",
-    "benchmark_nifti",
-    "benchmark_model_registry",
     "run_prediction_of_nnUNet_benchmark_models",
     "Database_viewer_final",
     "run_prediction_of_nnUNet_networks_on_TCIA_data_final",
     "run_prediction_of_nnUNet_networks_on_new_data",
-    "utils",
     "spinal_mm_cli",
     "config",
 ]

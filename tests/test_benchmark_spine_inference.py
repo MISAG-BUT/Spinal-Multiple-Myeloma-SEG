@@ -13,10 +13,10 @@ from unittest.mock import Mock, patch
 import nibabel as nib
 import numpy as np
 
-from benchmark_model_installation import InstallationError, ModelInstaller, ResolvedModel
-from benchmark_model_registry import SPINE_MODEL
-from benchmark_nifti import _new_image, compare_geometry, load_nifti, validate_plan_inputs
-from benchmark_spine_inference import (
+from utils.benchmark.model_installation import InstallationError, ModelInstaller, ResolvedModel
+from utils.benchmark.model_registry import SPINE_MODEL
+from utils.benchmark.nifti import _new_image, compare_geometry, load_nifti, validate_plan_inputs
+from utils.benchmark.spine_inference import (
     SpineInferenceError, create_predictor, infer_spine, run_spine_only, split_crops, validate_labels,
 )
 from run_prediction_of_nnUNet_benchmark_models import cli, parse_arguments
@@ -135,7 +135,7 @@ class SpineTests(unittest.TestCase):
     def test_source_derived_split_rule_regression(self):
         import ast
         root = Path(__file__).resolve().parents[1]
-        source = ast.parse((root / "utils.py").read_text(encoding="utf-8"))
+        source = ast.parse((root / "utils" / "legacy.py").read_text(encoding="utf-8"))
         function = next(node for node in source.body if isinstance(node, ast.FunctionDef) and node.name == "split_convCT_data")
         midpoint = next(node.value for node in ast.walk(function) if isinstance(node, ast.Assign)
                         and any(isinstance(target, ast.Name) and target.id == "mid_z" for target in node.targets))
@@ -208,7 +208,7 @@ class SpineTests(unittest.TestCase):
         nib.save(_new_image(data, reference, reference.affine), source)
         original = source.read_bytes()
         plan = self.plan(supplied=True)
-        with patch("benchmark_spine_inference.ModelInstaller", side_effect=AssertionError("model bypass")), patch("benchmark_spine_inference.create_predictor", side_effect=AssertionError("predictor bypass")):
+        with patch("utils.benchmark.spine_inference.ModelInstaller", side_effect=AssertionError("model bypass")), patch("utils.benchmark.spine_inference.create_predictor", side_effect=AssertionError("predictor bypass")):
             result = run_spine_only(plan, validate_plan_inputs(plan))
         np.testing.assert_array_equal(load_nifti(result / json.loads((result / "run.json").read_text())["labelled_output"]).dataobj, data)
         self.assertEqual(source.read_bytes(), original)
@@ -360,12 +360,12 @@ sys.exit(cli(sys.argv[1:]))
 
     def test_failed_publication_preserves_existing_destination(self):
         self.save_ct()
-        from benchmark_model_installation import _publish_directory
+        from utils.benchmark.model_installation import _publish_directory
         def publish(source, destination):
             destination.mkdir()
             (destination / "sentinel").write_bytes(b"existing output")
             return _publish_directory(source, destination)
-        with patch("benchmark_spine_inference._publish_directory", side_effect=publish), self.assertRaises(FileExistsError):
+        with patch("utils.benchmark.spine_inference._publish_directory", side_effect=publish), self.assertRaises(FileExistsError):
             self.execute(self.plan())
         runs = list(self.output.iterdir())
         self.assertEqual(len(runs), 2)
@@ -378,20 +378,20 @@ sys.exit(cli(sys.argv[1:]))
         self.save_ct()
         base = ["--input_dir", str(self.input), "--output_dir", str(self.output), "--skip_lesion_segmentation"]
         with contextlib.redirect_stdout(io.StringIO()), contextlib.redirect_stderr(io.StringIO()):
-            with patch("benchmark_spine_inference.create_predictor", side_effect=AssertionError("no inference")), patch("benchmark_spine_inference.ModelInstaller", side_effect=AssertionError("no resolution")):
+            with patch("utils.benchmark.spine_inference.create_predictor", side_effect=AssertionError("no inference")), patch("utils.benchmark.spine_inference.ModelInstaller", side_effect=AssertionError("no resolution")):
                 self.assertEqual(cli(base + ["--validate_only"]), 3)
             self.assertFalse(self.output.exists())
             installer = Mock()
             installer.resolve.return_value = self.resolved
-            with patch("benchmark_spine_inference.ModelInstaller", return_value=installer), patch("benchmark_spine_inference.create_predictor", return_value=FakePredictor()):
+            with patch("utils.benchmark.spine_inference.ModelInstaller", return_value=installer), patch("utils.benchmark.spine_inference.create_predictor", return_value=FakePredictor()):
                 self.assertEqual(cli(base), 0)
-            with patch("benchmark_spine_inference.ModelInstaller", side_effect=InstallationError("missing model")):
+            with patch("utils.benchmark.spine_inference.ModelInstaller", side_effect=InstallationError("missing model")):
                 self.assertEqual(cli(base), 4)
-            with patch("benchmark_spine_inference.ModelInstaller", side_effect=OSError("cache permission denied")):
+            with patch("utils.benchmark.spine_inference.ModelInstaller", side_effect=OSError("cache permission denied")):
                 self.assertEqual(cli(base), 4)
-            with patch("benchmark_spine_inference.ModelInstaller", return_value=installer), patch("benchmark_spine_inference.create_predictor", side_effect=SpineInferenceError("missing dependencies")):
+            with patch("utils.benchmark.spine_inference.ModelInstaller", return_value=installer), patch("utils.benchmark.spine_inference.create_predictor", side_effect=SpineInferenceError("missing dependencies")):
                 self.assertEqual(cli(base), 5)
-            with patch("benchmark_spine_inference.run_spine_only", side_effect=AssertionError("no partial lesion run")):
+            with patch("utils.benchmark.spine_inference.run_spine_only", side_effect=AssertionError("no partial lesion run")):
                 self.assertEqual(cli(base[:-1] + ["--lesion_model", "709", "--validate_only"]), 3)
 
     def test_concurrent_runs_have_unique_outputs(self):
@@ -422,7 +422,7 @@ sys.exit(cli(sys.argv[1:]))
         unrelated = self.output / "unrelated.txt"
         unrelated.write_bytes(b"preserve unrelated")
         arguments = ["--input_dir", str(self.input), "--output_dir", str(self.output), "--skip_lesion_segmentation"]
-        from benchmark_model_installation import _publish_directory
+        from utils.benchmark.model_installation import _publish_directory
         for failure in ("collision", "native"):
             with self.subTest(failure=failure):
                 destinations = []
@@ -436,7 +436,7 @@ sys.exit(cli(sys.argv[1:]))
                 installer = Mock()
                 installer.resolve.return_value = self.resolved
                 error = io.StringIO()
-                with patch("benchmark_spine_inference.ModelInstaller", return_value=installer), patch("benchmark_spine_inference.create_predictor", return_value=FakePredictor()), patch("benchmark_spine_inference._publish_directory", side_effect=publish), contextlib.redirect_stdout(io.StringIO()), contextlib.redirect_stderr(error):
+                with patch("utils.benchmark.spine_inference.ModelInstaller", return_value=installer), patch("utils.benchmark.spine_inference.create_predictor", return_value=FakePredictor()), patch("utils.benchmark.spine_inference._publish_directory", side_effect=publish), contextlib.redirect_stdout(io.StringIO()), contextlib.redirect_stderr(error):
                     self.assertEqual(cli(arguments), 5)
                 self.assertEqual(len(destinations), 2 if failure == "collision" else 1)
                 self.assertEqual((destinations[0] / "existing.txt").read_bytes(), b"existing output")
@@ -454,13 +454,13 @@ sys.exit(cli(sys.argv[1:]))
         installer = Mock()
         installer.resolve.return_value = self.resolved
         error = io.StringIO()
-        with patch("benchmark_spine_inference.ModelInstaller", return_value=installer), patch("benchmark_spine_inference.create_predictor", return_value=FakePredictor(empty)), contextlib.redirect_stdout(io.StringIO()), contextlib.redirect_stderr(error):
+        with patch("utils.benchmark.spine_inference.ModelInstaller", return_value=installer), patch("utils.benchmark.spine_inference.create_predictor", return_value=FakePredictor(empty)), contextlib.redirect_stdout(io.StringIO()), contextlib.redirect_stderr(error):
             self.assertEqual(cli(["--input_dir", str(self.input), "--output_dir", str(self.output), "--skip_lesion_segmentation"]), 5)
         self.assertIn("empty", error.getvalue())
         self.assertEqual(list(self.output.iterdir()), [])
 
     def test_supplied_empty_mask_and_binary_conversion_fail_without_side_effects(self):
-        from benchmark_nifti import binary_spine_mask
+        from utils.benchmark.nifti import binary_spine_mask
         reference = ct()
         empty = _new_image(np.zeros(reference.shape, np.uint8), reference, reference.affine)
         source = self.root / "supplied.nii.gz"
@@ -468,7 +468,7 @@ sys.exit(cli(sys.argv[1:]))
         original = source.read_bytes()
         with self.assertRaisesRegex(ValueError, "empty"):
             binary_spine_mask(empty)
-        with patch("benchmark_spine_inference.ModelInstaller", side_effect=AssertionError("resolution bypass")), patch("benchmark_spine_inference.create_predictor", side_effect=AssertionError("predictor bypass")), contextlib.redirect_stdout(io.StringIO()), contextlib.redirect_stderr(io.StringIO()):
+        with patch("utils.benchmark.spine_inference.ModelInstaller", side_effect=AssertionError("resolution bypass")), patch("utils.benchmark.spine_inference.create_predictor", side_effect=AssertionError("predictor bypass")), contextlib.redirect_stdout(io.StringIO()), contextlib.redirect_stderr(io.StringIO()):
             self.assertEqual(cli(["--input_dir", str(self.input), "--output_dir", str(self.output), "--skip_lesion_segmentation", "--spine_segmentation", str(source)]), 2)
         self.assertEqual(source.read_bytes(), original)
         self.assertFalse(self.output.exists())
@@ -482,7 +482,7 @@ sys.exit(cli(sys.argv[1:]))
             if name.split(".")[0] in ("torch", "nnunetv2"):
                 raise AssertionError("unexpected inference import")
             return importer(name, *args, **kwargs)
-        with patch("builtins.__import__", side_effect=guarded), patch("benchmark_spine_inference.ModelInstaller", side_effect=AssertionError("model bypass")), patch("socket.socket", side_effect=AssertionError("network forbidden")), contextlib.redirect_stdout(io.StringIO()), contextlib.redirect_stderr(io.StringIO()):
+        with patch("builtins.__import__", side_effect=guarded), patch("utils.benchmark.spine_inference.ModelInstaller", side_effect=AssertionError("model bypass")), patch("socket.socket", side_effect=AssertionError("network forbidden")), contextlib.redirect_stdout(io.StringIO()), contextlib.redirect_stderr(io.StringIO()):
             self.assertEqual(cli(["--input_dir", str(self.input), "--output_dir", str(self.output), "--skip_lesion_segmentation", "--spine_segmentation", str(source), "--install_models"]), 0)
         self.assertEqual(len(list(self.output.glob("*_output*"))), 1)
 
@@ -535,7 +535,7 @@ sys.exit(cli(sys.argv[1:]))
         opener = Mock(side_effect=lambda *args, **kwargs: Response(payload))
         installer = ModelInstaller(self.root / "cache", opener=opener, progress=lambda *args: None)
         self.save_ct()
-        with patch("benchmark_model_installation.get_model", return_value=spec):
+        with patch("utils.benchmark.model_installation.get_model", return_value=spec):
             plan = replace(self.plan(), install_models=True)
             first = run_spine_only(plan, validate_plan_inputs(plan), installer=installer, predictor_factory=FakePredictor)
             opener.assert_called_once()

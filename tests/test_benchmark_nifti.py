@@ -12,13 +12,13 @@ from unittest.mock import patch
 import nibabel as nib
 import numpy as np
 
-from benchmark_nifti import (
+from utils.benchmark.nifti import (
     orient_input, Crop, binary_spine_mask, compare_geometry, crop_image, load_nifti,
     padded_bounding_box, prepare_lesion_channels, reconstruct_lesions,
     save_prepared_channels, validate_image, validate_plan_inputs,
     validate_spine_segmentation, save_nifti_no_clobber,
 )
-from benchmark_model_registry import get_lesion_model
+from utils.benchmark.model_registry import get_lesion_model
 from run_prediction_of_nnUNet_benchmark_models import cli, parse_arguments
 
 
@@ -196,22 +196,22 @@ class PreprocessingTests(unittest.TestCase):
                     reconstruct_lesions(prediction, crop, reference, path)
                 self.assertEqual(path.read_bytes(), original)
             failed = Path(tmp) / "failed.nii.gz"
-            with patch("benchmark_nifti.nib.save", side_effect=OSError("write failed")):
+            with patch("utils.benchmark.nifti.nib.save", side_effect=OSError("write failed")):
                 with self.assertRaisesRegex(OSError, "write failed"):
                     reconstruct_lesions(prediction, crop, reference, failed)
             self.assertFalse(failed.exists())
             # A writer that returns without completing a NIfTI must not publish.
-            with patch("benchmark_nifti.nib.save"):
+            with patch("utils.benchmark.nifti.nib.save"):
                 with self.assertRaisesRegex(ValueError, "Cannot read"):
                     reconstruct_lesions(prediction, crop, reference, failed)
             self.assertFalse(failed.exists())
             self.assertEqual(list(Path(tmp).iterdir()), [path])
             # Simulate a destination appearing between temporary write and publish.
-            from benchmark_nifti import _rename_no_clobber
+            from utils.benchmark.nifti import _rename_no_clobber
             def racing_rename(src, dst):
                 Path(dst).write_bytes(b"concurrent writer")
                 return _rename_no_clobber(src, dst)
-            with patch("benchmark_nifti._rename_no_clobber", side_effect=racing_rename):
+            with patch("utils.benchmark.nifti._rename_no_clobber", side_effect=racing_rename):
                 with self.assertRaises(FileExistsError):
                     reconstruct_lesions(prediction, crop, reference, failed)
             self.assertEqual(failed.read_bytes(), b"concurrent writer")
@@ -345,14 +345,14 @@ class NiftiPublicationTests(unittest.TestCase):
         source = image(data)
         source.set_sform(None, 0)
         path = self.root / "labelled ž spine.nii.gz"
-        from benchmark_nifti import _rename_no_clobber
+        from utils.benchmark.nifti import _rename_no_clobber
         def publish(temporary, destination):
             self.assertEqual(temporary.parent, destination.parent)
             self.assertTrue(str(temporary).endswith(".nii.gz"))
             self.assertFalse(destination.exists())
             np.testing.assert_array_equal(load_nifti(temporary).dataobj, data)
             return _rename_no_clobber(temporary, destination)
-        with patch("benchmark_nifti.os.link", side_effect=OSError("hard links unsupported")) as link, patch("benchmark_nifti._rename_no_clobber", side_effect=publish):
+        with patch("utils.benchmark.nifti.os.link", side_effect=OSError("hard links unsupported")) as link, patch("utils.benchmark.nifti._rename_no_clobber", side_effect=publish):
             save_nifti_no_clobber(source, path)
         link.assert_not_called()
         written = load_nifti(path)
@@ -380,7 +380,7 @@ class NiftiPublicationTests(unittest.TestCase):
         import os
         from types import SimpleNamespace
         from unittest.mock import Mock
-        from benchmark_nifti import _rename_no_clobber
+        from utils.benchmark.nifti import _rename_no_clobber
         source, destination = self.root / "temporary", self.root / "final"
         for platform, function, arguments in (
             ("linux", "renameat2", (-100, os.fsencode(source), -100, os.fsencode(destination), 1)),
@@ -388,17 +388,17 @@ class NiftiPublicationTests(unittest.TestCase):
         ):
             operation = Mock(return_value=0)
             library = SimpleNamespace(**{function: operation})
-            with self.subTest(platform=platform), patch("benchmark_nifti.os.name", "posix"), patch("benchmark_nifti.sys.platform", platform), patch("benchmark_nifti.ctypes.CDLL", return_value=library):
+            with self.subTest(platform=platform), patch("utils.benchmark.nifti.os.name", "posix"), patch("utils.benchmark.nifti.sys.platform", platform), patch("utils.benchmark.nifti.ctypes.CDLL", return_value=library):
                 _rename_no_clobber(source, destination)
                 operation.assert_called_once_with(*arguments)
                 operation.return_value = -1
-                with patch("benchmark_nifti.ctypes.get_errno", return_value=errno.EEXIST):
+                with patch("utils.benchmark.nifti.ctypes.get_errno", return_value=errno.EEXIST):
                     with self.assertRaises(FileExistsError):
                         _rename_no_clobber(source, destination)
-                with patch("benchmark_nifti.ctypes.get_errno", return_value=errno.ENOSYS):
+                with patch("utils.benchmark.nifti.ctypes.get_errno", return_value=errno.ENOSYS):
                     with self.assertRaises(OSError):
                         _rename_no_clobber(source, destination)
-        with patch("benchmark_nifti.os.name", "posix"), patch("benchmark_nifti.sys.platform", "linux"), patch("benchmark_nifti.ctypes.CDLL", return_value=SimpleNamespace()):
+        with patch("utils.benchmark.nifti.os.name", "posix"), patch("utils.benchmark.nifti.sys.platform", "linux"), patch("utils.benchmark.nifti.ctypes.CDLL", return_value=SimpleNamespace()):
             with self.assertRaisesRegex(OSError, "unavailable"):
                 _rename_no_clobber(source, destination)
 
@@ -411,7 +411,7 @@ class NiftiPublicationTests(unittest.TestCase):
         original_bytes = mask.read_bytes()
         output = self.root / "outputs"
         error = io.StringIO()
-        with patch("benchmark_nifti._rename_no_clobber", side_effect=OSError(errno.ENOTSUP, "rename unavailable")), patch("benchmark_spine_inference.ModelInstaller", side_effect=AssertionError("supplied mask bypasses models")), contextlib.redirect_stdout(io.StringIO()), contextlib.redirect_stderr(error):
+        with patch("utils.benchmark.nifti._rename_no_clobber", side_effect=OSError(errno.ENOTSUP, "rename unavailable")), patch("utils.benchmark.spine_inference.ModelInstaller", side_effect=AssertionError("supplied mask bypasses models")), contextlib.redirect_stdout(io.StringIO()), contextlib.redirect_stderr(error):
             result = cli(["--input_dir", str(inputs), "--output_dir", str(output),
                           "--spine_segmentation", str(mask), "--skip_lesion_segmentation"])
         self.assertEqual(result, 5)
@@ -447,7 +447,7 @@ class NiftiPublicationTests(unittest.TestCase):
                                  ("_rename_no_clobber", OSError(errno.ENOTSUP, "exclusive rename unavailable")),
                                  ("os.fsync", OSError("fsync failed"))):
             with self.subTest(operation=operation, error=error):
-                with patch("benchmark_nifti." + operation, side_effect=error):
+                with patch("utils.benchmark.nifti." + operation, side_effect=error):
                     with self.assertRaises(OSError) as caught:
                         save_nifti_no_clobber(image(), path)
                 self.assertIsInstance(caught.exception, OSError)
@@ -459,7 +459,7 @@ class NiftiPublicationTests(unittest.TestCase):
         original_save = nib.save
         def corrupt(source, filename):
             original_save(image(np.ones(source.shape, np.float32)), filename)
-        with patch("benchmark_nifti.nib.save", side_effect=corrupt), patch("benchmark_nifti._rename_no_clobber") as publish:
+        with patch("utils.benchmark.nifti.nib.save", side_effect=corrupt), patch("utils.benchmark.nifti._rename_no_clobber") as publish:
             with self.assertRaisesRegex(ValueError, "voxel verification"):
                 save_nifti_no_clobber(image(), self.root / "invalid.nii.gz")
         publish.assert_not_called()
@@ -467,7 +467,7 @@ class NiftiPublicationTests(unittest.TestCase):
 
     def test_concurrent_publishers_have_one_winner_and_no_partial_file(self):
         import threading
-        from benchmark_nifti import _rename_no_clobber
+        from utils.benchmark.nifti import _rename_no_clobber
         barrier = threading.Barrier(2)
         outcomes, failures = [], []
         destination = self.root / "shared.nii.gz"
@@ -480,7 +480,7 @@ class NiftiPublicationTests(unittest.TestCase):
                 outcomes.append(value)
             except Exception as error:
                 failures.append(error)
-        with patch("benchmark_nifti._rename_no_clobber", side_effect=publish):
+        with patch("utils.benchmark.nifti._rename_no_clobber", side_effect=publish):
             threads = [threading.Thread(target=work, args=(value,)) for value in (300, 400)]
             for thread in threads:
                 thread.start()
@@ -497,7 +497,7 @@ class NiftiPublicationTests(unittest.TestCase):
 
 class CliGeometryTests(unittest.TestCase):
     def test_explicit_installation_happens_only_after_validation(self):
-        from benchmark_model_installation import InstallationError, ResolvedModel
+        from utils.benchmark.model_installation import InstallationError, ResolvedModel
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
             inputs = root / "inputs"
@@ -506,12 +506,12 @@ class CliGeometryTests(unittest.TestCase):
             path.write_bytes(b"invalid NIfTI")
             args = ["--input_dir", str(inputs), "--output_dir", str(root / "outputs"),
                     "--lesion_model", "709", "--install_models", "--cache_dir", str(root / "cache")]
-            with patch("benchmark_model_installation.ModelInstaller") as installer, contextlib.redirect_stdout(io.StringIO()), contextlib.redirect_stderr(io.StringIO()):
-                from benchmark_model_installation import ModelInstaller
+            with patch("utils.benchmark.model_installation.ModelInstaller") as installer, contextlib.redirect_stdout(io.StringIO()), contextlib.redirect_stderr(io.StringIO()):
+                from utils.benchmark.model_installation import ModelInstaller
                 def execute(plan, validated):
                     ModelInstaller(plan.cache_dir).resolve(plan.lesion_model.dataset_id, allow_download=plan.install_models)
                     return root / "run"
-                with patch("benchmark_lesion_inference.run_lesion_pipeline", side_effect=execute) as run:
+                with patch("utils.benchmark.lesion_inference.run_lesion_pipeline", side_effect=execute) as run:
                     self.assertEqual(cli(args), 2)
                     installer.assert_not_called()
                     run.assert_not_called()

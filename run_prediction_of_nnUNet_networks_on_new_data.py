@@ -38,7 +38,7 @@ Notes on Multiprocessing
   for faster nnU-Net inference.
 - On Windows, due to potential issues with Python multiprocessing, the default
   nnU-Net inference (variant 1) may fail when run from a clean session.
-- In such cases, open `utils.py` and in the function `run_nnunet_inference`, 
+- In such cases, open `utils/legacy.py` and in the function `run_nnunet_inference`,
   switch to variant 2 (`predict_from_files_sequential`), which disables multiprocessing.
   This ensures safe execution on Windows, although it may run slower.
 
@@ -74,7 +74,15 @@ setup_nnunet_env()
 # ----------------------------------------------------------
 # Project-specific imports
 # ----------------------------------------------------------
-from utils import *
+from utils.legacy import (
+    get_patient_name,
+    maybe_mkdir_p,
+    merge_data,
+    prepare_data_for_lesion_segmentation,
+    reorient_lesion_segmentation_to_original_space,
+    run_nnunet_inference,
+    split_convCT_data,
+)
 
 
 # ==========================================================

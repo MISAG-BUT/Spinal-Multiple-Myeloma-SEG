@@ -19,7 +19,7 @@ from typing import Optional, Tuple
 import nibabel as nib
 import numpy as np
 
-from benchmark_model_registry import get_lesion_model
+from .model_registry import get_lesion_model
 
 
 GEOMETRY_TOLERANCE_MM = 0.001
@@ -351,7 +351,7 @@ def spine_source_path(plan):
 
 
 def run_settings(plan):
-    from benchmark_model_installation import cache_location
+    from .model_installation import cache_location
     cache, source = cache_location(plan.cache_dir)
     return {
         "schema_version": 5, "case_id": plan.case_id,
