@@ -206,7 +206,7 @@ class InstallationTests(unittest.TestCase):
                 with patch("benchmark_model_installation.ctypes.get_errno", return_value=errno.ENOSYS):
                     with self.assertRaisesRegex(InstallationError, "Atomic no-clobber"):
                         _publish_directory(source, destination)
-        with patch("benchmark_model_installation.os.name", "posix"), patch("benchmark_model_installation.sys.platform", "linux"), patch("benchmark_model_installation.ctypes.CDLL", return_value=SimpleNamespace()):
+        with patch("benchmark_model_installation.os.name", "posix"), patch("benchmark_model_installation.__file__", str(self.root / "site-packages" / "benchmark_model_installation.py")), patch("benchmark_model_installation.sys.platform", "linux"), patch("benchmark_model_installation.ctypes.CDLL", return_value=SimpleNamespace()):
             with self.assertRaisesRegex(InstallationError, "unavailable"):
                 _publish_directory(source, destination)
 
@@ -219,7 +219,11 @@ class InstallationTests(unittest.TestCase):
             self.assertEqual(first.provenance["artifact"]["archive_md5"], spec.md5)
             self.assertEqual(len(first.provenance["files"]), 7)
             with patch.object(installer, "opener", side_effect=AssertionError("network forbidden")):
-                self.assertEqual(installer.resolve(710), first)
+                reused = installer.resolve(710, allow_download=False)
+            self.assertEqual(first.cache_status, "installed")
+            self.assertEqual(reused.cache_status, "reused")
+            self.assertEqual(first.provenance, reused.provenance)
+            self.assertEqual(first.model_directory, reused.model_directory)
             checkpoint = first.model_directory / "fold_0/checkpoint_final.pth"
             checkpoint.write_bytes(b"corrupt")
             with self.assertRaisesRegex(InstallationError, "integrity"):
@@ -516,15 +520,27 @@ class InstallationTests(unittest.TestCase):
         supplied = SimpleNamespace(spine_segmentation=Path("mask"), lesion_model=get_model(710), spine_model_dir=None)
         with patch.object(installer, "resolve", return_value="model") as resolve:
             self.assertEqual(installer.resolve_plan(supplied), {710: "model"})
-            resolve.assert_called_once_with(710)
+            resolve.assert_called_once_with(710, allow_download=True)
         supplied.lesion_model = None
         with patch.object(installer, "resolve", side_effect=AssertionError("no models needed")):
             self.assertEqual(installer.resolve_plan(supplied), {})
 
+    def test_project_cache_priority(self):
+        from benchmark_model_installation import cache_location
+        with patch("config.V3_MODEL_CACHE_DIR", None):
+            root = Path(__file__).resolve().parents[1]
+            self.assertEqual(cache_location(), (root / "Model_cache", "project"))
+        with patch("config.V3_MODEL_CACHE_DIR", str(self.root / "configured")):
+            self.assertEqual(cache_location(), (self.root / "configured", "config"))
+            self.assertEqual(cache_location(self.root / "cli"), (self.root / "cli", "command_line"))
+        with patch("config.V3_MODEL_CACHE_DIR", "relative"):
+            with self.assertRaisesRegex(ValueError, "absolute"):
+                cache_location()
+
     def test_platform_defaults_and_https_downgrade(self):
-        with patch("benchmark_model_installation.sys.platform", "win32"), patch.dict(os.environ, {"LOCALAPPDATA": str(self.root)}):
+        with patch("benchmark_model_installation.__file__", str(self.root / "site-packages" / "benchmark_model_installation.py")), patch("benchmark_model_installation.sys.platform", "win32"), patch.dict(os.environ, {"LOCALAPPDATA": str(self.root)}):
             self.assertEqual(default_cache_dir(), self.root / "SpinalMultipleMyelomaSEG")
-        with patch("benchmark_model_installation.sys.platform", "linux"), patch.dict(os.environ, {"XDG_CACHE_HOME": str(self.root)}):
+        with patch("benchmark_model_installation.__file__", str(self.root / "site-packages" / "benchmark_model_installation.py")), patch("benchmark_model_installation.sys.platform", "linux"), patch.dict(os.environ, {"XDG_CACHE_HOME": str(self.root)}):
             self.assertEqual(default_cache_dir(), self.root / "spinal-multiple-myeloma-seg")
         with self.assertRaisesRegex(InstallationError, "insecure"):
             _HttpsRedirects().redirect_request(None, None, 302, "", {}, "http://insecure.test")

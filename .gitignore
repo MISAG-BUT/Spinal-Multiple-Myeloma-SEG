@@ -21,3 +21,13 @@
 *.nii
 *.nii.gz
 *.dcm
+__pycache__/
+*.pyo
+*.pt
+*.ckpt
+*.safetensors
+*.zip
+*.part
+*.tmp
+*.log
+/diagnostics/

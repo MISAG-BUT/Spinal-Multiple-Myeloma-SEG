@@ -19,7 +19,8 @@ from benchmark_model_installation import (
 from benchmark_nifti import (
     binary_spine_mask, compare_geometry, load_nifti, prepare_lesion_channels,
     reconstruct_lesions, save_nifti_no_clobber, save_prepared_channels, image_geometry,
-    validate_label_values, case_output_paths, publish_case_run,
+    validate_label_values, case_output_paths, publish_case_run, image_on_reference_grid,
+    retain_intermediates, run_settings, spine_source_path,
 )
 from benchmark_spine_inference import (
     create_predictor, infer_spine, validate_labels, _label_image,
@@ -108,7 +109,8 @@ def _model_provenance(resolved, spec):
             "trainer": trainer, "plans": plans, "configuration": configuration,
             "trainer_directory": spec.trainer_directory, "folds": list(spec.folds),
             "checkpoint": spec.checkpoint_filename, "verification": resolved.verification,
-            "artifact": resolved.provenance.get("artifact")}
+            "artifact": resolved.provenance.get("artifact"), "cache_status": resolved.cache_status,
+            "external_source": resolved.provenance.get("source")}
 
 
 def run_lesion_pipeline(plan, validated_inputs, *, installer=None,
@@ -118,6 +120,7 @@ def run_lesion_pipeline(plan, validated_inputs, *, installer=None,
         raise ValueError("Select a lesion model for end-to-end lesion inference")
     spec = get_lesion_model(plan.lesion_model.dataset_id)
     reconstructions, segmentation, reference = validated_inputs
+    prepared_input = plan.nnunet_input_dir is not None
     if segmentation is not None:
         validate_labels(segmentation)
         compare_geometry(reference, segmentation, "supplied spine segmentation")
@@ -149,31 +152,41 @@ def run_lesion_pipeline(plan, validated_inputs, *, installer=None,
         validate_labels(labelled)
         compare_geometry(reference, labelled, "full spine segmentation")
         binary = _label_image(np.asanyarray(binary_spine_mask(labelled).dataobj), reference)
-        prepared = prepare_lesion_channels(spec.dataset_id, reconstructions, labelled, reference)
+        prepared = prepare_lesion_channels(spec.dataset_id, reconstructions, labelled, reference,
+                                           already_cropped=plan.already_cropped)
         cropped_prediction = infer_lesions(prepared, lesion_model, work / "lesion",
                                            predictor_factory=lesion_predictor_factory)
-        lesions = reconstruct_lesions(cropped_prediction, prepared.crop, reference)
+        if prepared.crop is None:
+            lesions = image_on_reference_grid(np.asanyarray(cropped_prediction.dataobj).astype(np.uint8, copy=False), reference)
+        else:
+            lesions = reconstruct_lesions(cropped_prediction, prepared.crop, reference)
         compare_geometry(reference, lesions, "full lesion segmentation")
         paths = case_output_paths(plan)
         for folder in {Path(path).parent for path in paths.values()}:
             (stage / folder).mkdir(parents=True, exist_ok=True)
-        published_labelled = validated_inputs.reference.restore(labelled)
+        published_labelled = None if prepared_input else validated_inputs.reference.restore(labelled)
         published_lesions = validated_inputs.reference.restore(lesions)
-        save_nifti_no_clobber(published_labelled, stage / paths["labelled_output"])
+        if published_labelled is not None:
+            save_nifti_no_clobber(published_labelled, stage / paths["labelled_output"])
         save_nifti_no_clobber(validated_inputs.reference.restore(binary), stage / paths["binary_output"])
         save_nifti_no_clobber(published_lesions, stage / paths["lesion_output"])
-        if segmentation is not None:
-            shutil.copyfile(str(plan.spine_segmentation), str(stage / paths["supplied_spine_copy"]))
+        source_mask = spine_source_path(plan)
+        if source_mask is not None:
+            shutil.copyfile(source_mask, stage / paths["supplied_spine_copy"])
+        intermediates = retain_intermediates(
+            stage, validated_inputs, split_work=work / "spine" if split_effective else None,
+            lesion_work=work / "lesion" if prepared.crop is not None else None,
+        ) if plan.keep_intermediates else {}
         if work.resolve().parent != stage.resolve():
             raise LesionInferenceError("Temporary work directory escaped its run directory")
         shutil.rmtree(work)
         manifest = {
-            "schema_version": 4, "case_id": plan.case_id, "phase": "4B", "status": "completed",
+            **run_settings(plan), "phase": "4B", "status": "completed",
             "completed_at": datetime.now(timezone.utc).isoformat(),
-            "spine_source": "automatic" if spine_model else "supplied",
+            "spine_source": "prepared_binary_channel" if prepared_input else "automatic" if spine_model else "supplied",
             "source_convct": next((path.name for name, path in plan.modality_paths if name == "ConvCT"), None),
-            "source_reconstructions": {name: path.name for name, path in plan.modality_paths},
-            "source_segmentation": plan.spine_segmentation.name if segmentation is not None else None,
+            "source_reconstructions": {name: path.name for name, path in plan.modality_paths if name != "mask_spine"},
+            "source_segmentation": source_mask.name if source_mask is not None else None,
             "model": _model_provenance(spine_model, SPINE_MODEL) if spine_model else None,
             "lesion_model": _model_provenance(lesion_model, spec),
             "split_requested": plan.split, "split_effective": split_effective,
@@ -182,11 +195,14 @@ def run_lesion_pipeline(plan, validated_inputs, *, installer=None,
             "ordered_lesion_channels": list(spec.channel_names),
             "reference_geometry": image_geometry(validated_inputs.reference.original),
             "cropped_geometry": image_geometry(prepared.images[0]),
-            "output_geometry": image_geometry(published_lesions), "spine_geometry": image_geometry(published_labelled),
+            "output_geometry": image_geometry(published_lesions),
+            "spine_geometry": image_geometry(published_labelled) if published_labelled is not None else image_geometry(validated_inputs.reference.original),
             "orientation": validated_inputs.orientation_provenance(),
             "crop": {"start": list(prepared.crop.start), "stop": list(prepared.crop.stop),
                      "upper_bounds": "exclusive", "padding_voxels": 5, "grid": "reference_ras",
-                     "original_shape": list(prepared.crop.original_shape)},
+                     "original_shape": list(prepared.crop.original_shape)} if prepared.crop is not None else None,
+            "application_crop": "applied" if prepared.crop is not None else "already_cropped",
+            "intermediates": intermediates,
             **paths, "lesion_inference": "completed",
         }
         with (stage / "run.json").open("x", encoding="utf-8") as stream:

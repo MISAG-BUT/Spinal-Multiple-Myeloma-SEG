@@ -4,6 +4,7 @@ from dataclasses import replace
 import contextlib
 import io
 import json
+import shutil
 from pathlib import Path
 import subprocess
 import sys
@@ -149,7 +150,7 @@ class LesionTests(unittest.TestCase):
                 source_bytes = self.mask_path.read_bytes()
                 installer = self.installer()
                 result, fake = self.run_pipeline(plan, installer=installer)
-                installer.resolve.assert_called_once_with(model_id, allow_download=False)
+                installer.resolve.assert_called_once_with(model_id, allow_download=True)
                 self.assertEqual(fake.initialized, (str(self.model(model_id).model_directory), (0, 1, 2, 3, 4), "checkpoint_final.pth"))
                 manifest = json.loads((result / "run.json").read_text())
                 self.assertEqual(manifest["ordered_lesion_channels"], list(spec.channel_names))
@@ -230,6 +231,83 @@ class LesionTests(unittest.TestCase):
             validate_plan_inputs(plan)
         self.assertFalse(self.output.exists())
 
+    def test_prepared_binary_channels_share_normal_inference_and_crop(self):
+        regular = self.plan()
+        regular_run, regular_fake = self.run_pipeline(regular)
+        folder = self.root / "prepared"
+        folder.mkdir()
+        shutil.copyfile(self.inputs / "VMI_40.nii.gz", folder / "scan_0000.nii.gz")
+        binary = _new_image((self.mask_data != 0).astype(np.uint8), self.reference, self.reference.affine)
+        mask_file = folder / "scan_0001.nii.gz"
+        lps = binary.as_reoriented(np.array([[0, -1], [1, -1], [2, 1]]))
+        nib.save(lps, mask_file)
+        source = mask_file.read_bytes()
+        args = ["--nnunet_input_dir", str(folder), "--nnunet_case_prefix", "scan", "--case_id", "case",
+                "--output_dir", str(self.output), "--lesion_model", "710", "--offline", "--keep_intermediates"]
+        plan = parse_arguments(args)
+        installer = self.installer()
+        run, fake = self.run_pipeline(plan, installer=installer)
+        installer.resolve.assert_called_once_with(710, allow_download=False)
+        manifest = json.loads((run / "run.json").read_text())
+        self.assertEqual(manifest["spine_source"], "prepared_binary_channel")
+        self.assertIsNone(manifest["model"])
+        self.assertNotIn("labelled_output", manifest)
+        self.assertEqual((run / manifest["supplied_spine_copy"]).read_bytes(), source)
+        self.assertEqual(mask_file.read_bytes(), source)
+        prior = json.loads((regular_run / "run.json").read_text())
+        self.assertEqual(prior["crop"], manifest["crop"])
+        for x, y in zip(fake.channels, regular_fake.channels):
+            compare_geometry(x, y)
+            np.testing.assert_array_equal(x.dataobj, y.dataobj)
+        self.assertEqual(len(manifest["intermediates"]), 4)
+        self.assertTrue((run / "Intermediates/RAS/mask_spine.nii.gz").exists())
+        self.assertFalse((run / "Intermediates/Spine_chunks").exists())
+        cropped = parse_arguments(args + ["--already_cropped"])
+        run, fake = self.run_pipeline(cropped)
+        manifest = json.loads((run / "run.json").read_text())
+        self.assertIsNone(manifest["crop"])
+        self.assertEqual(manifest["application_crop"], "already_cropped")
+        self.assertEqual(fake.channels[0].shape, self.reference.shape)
+        compare_geometry(load_nifti(run / manifest["lesion_output"]), self.reference)
+
+    def test_keep_intermediates_publishes_only_completed_actual_stages(self):
+        from dataclasses import replace
+        auto = replace(self.plan(supplied=False), keep_intermediates=True)
+        source = self.inputs / "ConvCT.nii.gz"
+        ras = nib.load(source)
+        lps = ras.as_reoriented(np.array([[0, -1], [1, -1], [2, 1]]))
+        nib.save(lps, source)
+        original = source.read_bytes()
+        run, _ = self.run_pipeline(auto)
+        manifest = json.loads((run / "run.json").read_text())
+        artifacts = manifest["intermediates"]
+        self.assertEqual(len(artifacts), 8)
+        self.assertIn("Intermediates/RAS/ConvCT.nii.gz", artifacts)
+        self.assertNotIn("Intermediates/RAS/VMI_40.nii.gz", artifacts)
+        for file, geometry in artifacts.items():
+            image = nib.load(run / file)
+            self.assertEqual(list(image.shape), geometry["shape"])
+            np.testing.assert_array_equal(image.affine, geometry["affine"])
+        self.assertEqual(source.read_bytes(), original)
+        self.assertFalse((run / "work").exists())
+        with self.assertRaises(LesionInferenceError):
+            self.run_pipeline(auto, LesionPredictor(auto.lesion_model, fail=True))
+        self.assertEqual(list(self.output.iterdir()), [run])
+
+    def test_prepared_mask_rejects_empty_and_multilabel(self):
+        self.plan()
+        folder = self.root / "prepared"
+        folder.mkdir()
+        shutil.copyfile(self.inputs / "VMI_40.nii.gz", folder / "data_0000.nii.gz")
+        args = ["--nnunet_input_dir", str(folder), "--case_id", "case", "--output_dir", str(self.output),
+                "--lesion_model", "710", "--validate_only"]
+        for value in (0, 2):
+            data = np.full(self.reference.shape, value, dtype=np.uint8)
+            nib.save(_new_image(data, self.reference, self.reference.affine), folder / "data_0001.nii.gz")
+            with self.assertRaisesRegex(ValueError, "binary spine mask"):
+                validate_plan_inputs(parse_arguments(args))
+        self.assertFalse(self.output.exists())
+
     def test_explicit_supplied_uncompressed_and_repeated_outputs(self):
         self.plan(710)
         source = self.root / "supplied.nii"
@@ -303,6 +381,8 @@ class LesionTests(unittest.TestCase):
 
     def test_real_installer_missing_lesion_never_uses_network(self):
         plan = self.plan(710)
+        from dataclasses import replace
+        plan = replace(plan, install_models=False, offline=True)
         opener = Mock(side_effect=AssertionError("network forbidden"))
         installer = ModelInstaller(self.root / "cache", opener=opener)
         with self.assertRaisesRegex(InstallationError, "--install_models"):

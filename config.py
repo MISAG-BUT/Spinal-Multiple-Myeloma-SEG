@@ -67,3 +67,8 @@ PATH_TO_VMI40_NIFTI = r"F:/Example_data/DATA/New_Data/Myel_001_monoe_40kev.nii.g
 # Example: F:/Example_data/DATA/New_Data/Output_folder
 PATH_TO_OUTPUT_FOLDER = r"F:/Example_data/DATA/New_Data/Output_folder"
 
+
+
+# V3 – Benchmark model configuration
+# None uses Model_cache/ inside the project root. Set an absolute path to override.
+V3_MODEL_CACHE_DIR = None

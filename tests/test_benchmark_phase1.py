@@ -275,6 +275,53 @@ class ExplicitInputTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "--case_id is required"):
             validate_arguments(build_parser().parse_args(arguments[2:] + conv))
 
+    def test_prepared_channels_all_models_and_invalid_prefix_files(self):
+        from benchmark_model_registry import LESION_MODELS
+        from run_prediction_of_nnUNet_benchmark_models import build_parser, validate_arguments
+        for model_id, spec in LESION_MODELS.items():
+            with self.subTest(model=model_id):
+                folder = self.root / str(model_id)
+                folder.mkdir()
+                for index in range(len(spec.channel_names)):
+                    (folder / f"patient_{index:04d}.nii.gz").touch()
+                args = self.base + ["--nnunet_input_dir", str(folder), "--nnunet_case_prefix", "patient",
+                                    "--lesion_model", str(model_id)]
+                plan = parse_arguments(args)
+                self.assertEqual(tuple(name for name, _ in plan.modality_paths), spec.channel_names)
+                self.assertTrue(plan.install_models)
+                self.assertFalse(parse_arguments(args + ["--offline"]).install_models)
+                (folder / "patient_9999.nii.gz").touch()
+                with self.assertRaisesRegex(ValueError, "unexpected"):
+                    validate_arguments(build_parser().parse_args(args))
+        with patch("socket.socket", side_effect=AssertionError("network forbidden")), contextlib.redirect_stdout(io.StringIO()) as stream:
+            self.assertEqual(cli(["--model_info", "710"]), 0)
+            self.assertIn("1: mask_spine -> data_0001.nii.gz", stream.getvalue())
+            self.assertEqual(cli(["--list_models"]), 0)
+
+    def test_prepared_input_conflicts_and_missing_channels(self):
+        from run_prediction_of_nnUNet_benchmark_models import build_parser, validate_arguments
+        folder = self.root / "prepared"
+        folder.mkdir()
+        (folder / "data_0000.nii.gz").touch()
+        args = self.base + ["--nnunet_input_dir", str(folder), "--lesion_model", "710"]
+        for extra, message in (
+            ([], "missing"),
+            (["--input_dir", str(self.root)], "conflicts"),
+            (["--spine_segmentation", str(self.spine)], "conflicts"),
+            (["--split", "True"], "conflicts"),
+            (["--offline", "--install_models"], "not allowed"),
+        ):
+            with self.subTest(extra=extra):
+                if "not allowed" in message:
+                    with contextlib.redirect_stderr(io.StringIO()), self.assertRaises(SystemExit):
+                        parse_arguments(args + extra)
+                else:
+                    with self.assertRaisesRegex(ValueError, message):
+                        validate_arguments(build_parser().parse_args(args + extra))
+        (folder / "DATA_0001.nii.gz").touch()
+        with self.assertRaisesRegex(ValueError, "unexpected"):
+            validate_arguments(build_parser().parse_args(args))
+
     def test_case_id_safety_and_directory_default(self):
         from run_prediction_of_nnUNet_benchmark_models import validate_case_id
         for value in ("", ".", "..", "a/b", "a\\b", "x:y", "AUX", "lpt9", "a.", "a ", "é", "a" * 81):

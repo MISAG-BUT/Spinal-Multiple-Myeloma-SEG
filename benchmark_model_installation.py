@@ -54,14 +54,37 @@ class ResolvedModel:
     dataset_id: int
     verification: str
     provenance: dict
+    cache_status: str = "unknown"
 
 
-def default_cache_dir():
+def _user_cache_dir():
     if sys.platform == "win32":
         return Path(os.environ.get("LOCALAPPDATA", str(Path.home() / "AppData" / "Local"))) / "SpinalMultipleMyelomaSEG"
     if sys.platform == "darwin":
         return Path.home() / "Library" / "Caches" / "SpinalMultipleMyelomaSEG"
     return Path(os.environ.get("XDG_CACHE_HOME", str(Path.home() / ".cache"))) / "spinal-multiple-myeloma-seg"
+
+
+def cache_location(override=None):
+    """Resolve cache settings independently of the current working directory."""
+    if override is not None:
+        return Path(override).absolute(), "command_line"
+    from config import V3_MODEL_CACHE_DIR
+    if V3_MODEL_CACHE_DIR is not None:
+        path = Path(V3_MODEL_CACHE_DIR)
+        if not path.is_absolute():
+            raise ValueError("V3_MODEL_CACHE_DIR must be an absolute path")
+        return path, "config"
+    root = Path(__file__).resolve().parent
+    if ((root / "pyproject.toml").is_file() and (root / "config.py").is_file()
+            and (root / "run_prediction_of_nnUNet_benchmark_models.py").is_file()
+            and not {"site-packages", "dist-packages", ".venv"}.intersection(root.parts)):
+        return root / "Model_cache", "project"
+    return _user_cache_dir().absolute(), "user"
+
+
+def default_cache_dir():
+    return cache_location()[0]
 
 
 def _digest(path, algorithm="sha256"):
@@ -265,7 +288,10 @@ def extract_model(archive, spec, destination):
             expanded = sum(info.file_size for info, _ in selected)
             if expanded > spec.zip_size * 10 + 64 * 1024 * 1024:
                 raise InstallationError("Excessive extracted model size")
-            if shutil.disk_usage(destination.parent).free < expanded + 16 * 1024 * 1024:
+            required = expanded + 16 * 1024 * 1024
+            free = shutil.disk_usage(destination.parent).free
+            print(f"Model {spec.dataset_id} extraction: {expanded} bytes, required with margin {required} bytes, free {free} bytes")
+            if free < required:
                 raise InstallationError("Insufficient free space for model extraction")
             destination.mkdir()
             for info, relative in selected:
@@ -339,11 +365,18 @@ class ModelInstaller:
                 archive.unlink()  # Only this model's invalid managed cached archive.
         if urlparse(spec.download_url).scheme != "https":
             raise InstallationError("Model downloads require HTTPS")
-        if shutil.disk_usage(archive.parent).free < spec.zip_size + 16 * 1024 * 1024:
+        free = shutil.disk_usage(archive.parent).free
+        required = spec.zip_size + 16 * 1024 * 1024
+        estimate = required + spec.zip_size
+        print(f"Model {spec.dataset_id} download: archive {spec.zip_size} bytes, destination {archive}, "
+              f"free {free} bytes, archive minimum {required} bytes, "
+              f"preliminary archive + extraction estimate {estimate} bytes (exact extraction check follows)")
+        if free < required:
             raise InstallationError("Insufficient free space for model archive")
         part = _plain_path(archive.with_name(archive.name + ".part"))
         last_error = None
         for attempt in range(self.retries):
+            started = time.monotonic()
             try:
                 # Restart from zero. No unchecked range/append semantics.
                 try:
@@ -373,10 +406,13 @@ class ModelInstaller:
                             self.progress(done, spec.zip_size)
                         output.flush()
                         os.fsync(output.fileno())
+                print(f"\nModel {spec.dataset_id} transfer: {time.monotonic() - started:.3f} s")
+                started = time.monotonic()
                 try:
                     verify_archive(part, spec)
                 except InstallationError as error:
                     raise _RetryableDownloadError(str(error)) from error
+                print(f"Model {spec.dataset_id} archive verification: {time.monotonic() - started:.3f} s")
                 _publish_archive(part, archive, spec)
                 return archive
             except _RetryableDownloadError as error:
@@ -390,7 +426,7 @@ class ModelInstaller:
                     part.unlink()
         raise InstallationError("Download failed after {} attempts for {}: {}".format(self.retries, spec.zip_filename, last_error))
 
-    def _managed(self, dataset, spec):
+    def _managed(self, dataset, spec, *, cache_status="reused"):
         trainer = validate_model(dataset / spec.trainer_directory, spec)
         receipt_path = _plain_path(dataset / RECEIPT)
         if not receipt_path.is_file():
@@ -400,7 +436,7 @@ class ModelInstaller:
                 or receipt.get("verification") != "full-archive-size-md5-and-extracted-sha256"
                 or receipt.get("files") != _inventory(dataset)):
             raise InstallationError("Managed model integrity/provenance mismatch: {}. Existing files were preserved.".format(dataset))
-        return ResolvedModel(trainer, spec.dataset_id, "pinned-archive-and-local-sha256", receipt)
+        return ResolvedModel(trainer, spec.dataset_id, "pinned-archive-and-local-sha256", receipt, cache_status)
 
     def resolve(self, dataset_id, *, spine_model_dir=None, allow_download=True):
         """Resolve/install one model. Explicit external spine models are read-only.
@@ -416,15 +452,16 @@ class ModelInstaller:
             return ResolvedModel(trainer, dataset_id, "structural-only", {
                 "source": str(trainer), "cryptographically_verified": False,
                 "warning": "External checkpoint identity has not been verified against the Zenodo artifact",
-            })
+            }, "external")
         with self._lock("model-{}-{}".format(spec.zenodo_record_id, spec.dataset_id)):
             parent = self._directory("models", spec.zenodo_record_id)
             dataset = _plain_path(parent / spec.dataset_name)
             if dataset.exists():
                 return self._managed(dataset, spec)
             if not allow_download:
-                raise InstallationError("Model {} is not installed. Re-run with --install_models to authorize installation, or supply --spine_model_dir for model 802. No download was attempted.".format(dataset_id))
+                raise InstallationError("Model {} is not installed. Disable --offline to allow installation (formerly --install_models), or supply --spine_model_dir for model 802. No download was attempted.".format(dataset_id))
             archive = self._download(spec)
+            started = time.monotonic()
             staging_root = self._directory("staging")
             with tempfile.TemporaryDirectory(prefix="model-{}-".format(dataset_id), dir=str(staging_root)) as temporary:
                 staging = Path(temporary) / "extracted"
@@ -442,13 +479,16 @@ class ModelInstaller:
                     os.fsync(stream.fileno())
                 self._managed(staged_dataset, spec)
                 _publish_directory(staged_dataset, dataset)
-            return self._managed(dataset, spec)
+            result = self._managed(dataset, spec, cache_status="installed")
+            print(f"Model {spec.dataset_id} installation and verification: {time.monotonic() - started:.3f} s")
+            return result
 
     def resolve_plan(self, plan):
         """Install only models required by a previously validated V3 execution plan."""
         resolved = {}
-        if plan.spine_segmentation is None:
-            resolved[802] = self.resolve(802, spine_model_dir=plan.spine_model_dir)
+        allow = getattr(plan, "install_models", True)
+        if plan.spine_segmentation is None and not getattr(plan, "nnunet_input_dir", None):
+            resolved[802] = self.resolve(802, spine_model_dir=plan.spine_model_dir, allow_download=allow)
         if plan.lesion_model is not None:
-            resolved[plan.lesion_model.dataset_id] = self.resolve(plan.lesion_model.dataset_id)
+            resolved[plan.lesion_model.dataset_id] = self.resolve(plan.lesion_model.dataset_id, allow_download=allow)
         return resolved

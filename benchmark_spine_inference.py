@@ -18,7 +18,7 @@ from benchmark_model_installation import ModelInstaller, InstallationError, _pub
 from benchmark_nifti import (
     Crop, _new_image, binary_spine_mask, compare_geometry, crop_image,
     load_nifti, save_nifti_no_clobber, validate_image, image_on_reference_grid, image_geometry,
-    validate_label_values, case_output_paths, publish_case_run,
+    validate_label_values, case_output_paths, publish_case_run, retain_intermediates, run_settings,
 )
 
 
@@ -156,9 +156,12 @@ def run_spine_only(plan, validated_inputs, *, installer=None, predictor_factory=
     reconstructions, segmentation, reference = validate_spine_inputs(plan, validated_inputs)
     resolved = None
     if segmentation is None:
-        resolved = (installer or ModelInstaller(plan.cache_dir)).resolve(
-            802, spine_model_dir=plan.spine_model_dir, allow_download=plan.install_models,
-        )
+        try:
+            resolved = (installer or ModelInstaller(plan.cache_dir)).resolve(
+                802, spine_model_dir=plan.spine_model_dir, allow_download=plan.install_models,
+            )
+        except OSError as error:
+            raise InstallationError(f"Model preflight failed: {error}") from error
     output = Path(plan.output_dir)
     output.mkdir(parents=True, exist_ok=True)
     with tempfile.TemporaryDirectory(prefix=".v3-spine-", dir=str(output)) as temporary:
@@ -184,11 +187,14 @@ def run_spine_only(plan, validated_inputs, *, installer=None, predictor_factory=
         save_nifti_no_clobber(validated_inputs.reference.restore(binary), stage / paths["binary_output"])
         if segmentation is not None:
             shutil.copyfile(str(plan.spine_segmentation), str(stage / paths["supplied_spine_copy"]))
+        intermediates = retain_intermediates(
+            stage, validated_inputs, split_work=work if split_effective else None,
+        ) if plan.keep_intermediates else {}
         if work.resolve().parent != stage.resolve():
             raise SpineInferenceError("Temporary work directory escaped its run directory")
         shutil.rmtree(work)
         manifest = {
-            "schema_version": 4, "case_id": plan.case_id, "phase": "4A", "status": "completed",
+            **run_settings(plan), "phase": "4A", "status": "completed",
             "completed_at": datetime.now(timezone.utc).isoformat(),
             "spine_source": "automatic" if resolved else "supplied",
             "source_convct": next((path.name for name, path in plan.modality_paths if name == "ConvCT"), None),
@@ -197,13 +203,15 @@ def run_spine_only(plan, validated_inputs, *, installer=None, predictor_factory=
             "split_requested": plan.split, "split_effective": split_effective,
             "split_fallback": "single_z_slice" if resolved and plan.split and reference.shape[2] == 1 else None,
             "model": {"dataset_id": 802, "verification": resolved.verification,
-                      "artifact": resolved.provenance.get("artifact"),
+                      "artifact": resolved.provenance.get("artifact"), "cache_status": resolved.cache_status,
+                      "external_source": resolved.provenance.get("source"),
                       "folds": list(SPINE_MODEL.folds), "checkpoint": SPINE_MODEL.checkpoint_filename,
                       "trainer_directory": SPINE_MODEL.trainer_directory} if resolved else None,
             "reference_geometry": image_geometry(validated_inputs.reference.original),
             "output_geometry": image_geometry(published_labelled),
             "orientation": validated_inputs.orientation_provenance(),
             **paths, "lesion_inference": "not_requested",
+            "application_crop": "not_applicable", "intermediates": intermediates,
         }
         with (stage / "run.json").open("x", encoding="utf-8") as stream:
             json.dump(manifest, stream, indent=2)

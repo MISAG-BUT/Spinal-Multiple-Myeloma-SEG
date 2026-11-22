@@ -14,7 +14,7 @@ import os
 import sys
 import tempfile
 import uuid
-from typing import Tuple
+from typing import Optional, Tuple
 
 import nibabel as nib
 import numpy as np
@@ -224,7 +224,7 @@ def crop_image(image, crop):
 class PreparedChannels:
     channel_names: Tuple[str, ...]
     images: tuple
-    crop: Crop
+    crop: Optional[Crop]
     reference: object
 
     @property
@@ -232,7 +232,7 @@ class PreparedChannels:
         return tuple("case_0001_{:04d}.nii.gz".format(i) for i in range(len(self.images)))
 
 
-def prepare_lesion_channels(dataset_id, reconstructions, segmentation, reference=None):
+def prepare_lesion_channels(dataset_id, reconstructions, segmentation, reference=None, *, already_cropped=False):
     """Prepare ordered cropped images in memory; source images are never changed."""
     model = get_lesion_model(dataset_id)
     missing = [name for name in model.required_modalities if name not in reconstructions]
@@ -246,6 +246,11 @@ def prepare_lesion_channels(dataset_id, reconstructions, segmentation, reference
     compare_geometry(reference, binary, "spine segmentation")
     for name in model.required_modalities:
         compare_geometry(reference, reconstructions[name], name)
+    if already_cropped:
+        channels = tuple(reconstructions[name] for name in model.required_modalities) + (binary,)
+        return PreparedChannels(model.channel_names, tuple(
+            image_on_reference_grid(np.asanyarray(channel.dataobj), reference) for channel in channels
+        ), None, reference)
     crop = padded_bounding_box(binary)
     cropped_reference = crop_image(reference, crop)
     # Geometry validation establishes matching voxel indices. Use the single
@@ -339,18 +344,78 @@ def save_nifti_no_clobber(image, output_path):
         temporary.unlink(missing_ok=True)
 
 
+def spine_source_path(plan):
+    if plan.nnunet_input_dir is not None:
+        return dict(plan.modality_paths)["mask_spine"]
+    return plan.spine_segmentation
+
+
+def run_settings(plan):
+    from benchmark_model_installation import cache_location
+    cache, source = cache_location(plan.cache_dir)
+    return {
+        "schema_version": 5, "case_id": plan.case_id,
+        "input_mode": ("prepared_nnunet" if plan.nnunet_input_dir is not None else
+                       "directory" if plan.input_dir is not None else "explicit"),
+        "prepared_channels": [
+            {"index": index, "channel": name, "source_file": path.name}
+            for index, (name, path) in enumerate(plan.modality_paths)
+        ] if plan.nnunet_input_dir is not None else None,
+        "model_cache": {"path": str(cache), "source": source},
+        "offline": plan.offline,
+        "keep_intermediates": plan.keep_intermediates,
+    }
+
+
+def retain_intermediates(stage, validated_inputs, *, split_work=None, lesion_work=None):
+    """Move staged predictions and write only nonidentity RAS input images."""
+    artifacts = {}
+    root = stage / "Intermediates"
+
+    def record(path):
+        artifacts[path.relative_to(stage).as_posix()] = image_geometry(nib.load(str(path)))
+
+    for name, source in validated_inputs.oriented.items():
+        if not np.array_equal(source.to_ras, _RAS):
+            path = root / "RAS" / f"{name}.nii.gz"
+            path.parent.mkdir(parents=True, exist_ok=True)
+            nib.save(source.ras, str(path))
+            record(path)
+    if split_work is not None:
+        for part in sorted(split_work.glob("part_*")):
+            folder = root / "Spine_chunks" / part.name
+            folder.mkdir(parents=True)
+            for source, name in (("inputs/case_0001_0000.nii.gz", "ConvCT.nii.gz"),
+                                 ("predictions/case_0001.nii.gz", "spine.nii.gz")):
+                path = folder / name
+                (part / source).rename(path)
+                record(path)
+    if lesion_work is not None:
+        folder = root / "Lesion_crop"
+        folder.mkdir(parents=True)
+        (lesion_work / "inputs").rename(folder / "inputs")
+        prediction = folder / "lesions.nii.gz"
+        (lesion_work / "predictions/case_0001.nii.gz").rename(prediction)
+        for path in sorted((folder / "inputs").iterdir()):
+            record(path)
+        record(prediction)
+    return artifacts
+
+
 def case_output_paths(plan):
     """Relative paths shared by publication, the manifest and the CLI."""
     root = Path("Segmentation")
     spine = root / "Spine_segmentation_final"
     paths = {
-        "labelled_output": spine / f"{plan.case_id}_spine_segmentation.nii.gz",
         "binary_output": spine / f"{plan.case_id}_spine_binary.nii.gz",
     }
+    if plan.nnunet_input_dir is None:
+        paths["labelled_output"] = spine / f"{plan.case_id}_spine_segmentation.nii.gz"
     if plan.lesion_model is not None:
         paths["lesion_output"] = root / "Lesion_segmentation_final" / f"{plan.case_id}_lesions_segmentation.nii.gz"
-    if plan.spine_segmentation is not None:
-        suffix = ".nii.gz" if plan.spine_segmentation.name.lower().endswith(".nii.gz") else ".nii"
+    mask_path = spine_source_path(plan)
+    if mask_path is not None:
+        suffix = ".nii.gz" if mask_path.name.lower().endswith(".nii.gz") else ".nii"
         paths["supplied_spine_copy"] = spine / f"{plan.case_id}_spine_supplied{suffix}"
     return {key: path.as_posix() for key, path in paths.items()}
 
@@ -471,10 +536,13 @@ def validate_plan_inputs(plan):
         except (OSError, EOFError, ValueError, nib.filebasedimages.ImageFileError,
                 nib.spatialimages.HeaderDataError) as error:
             raise ValueError("Cannot read valid NIfTI {}: {}".format(path, error)) from error
-    supplied = oriented.get("spine_segmentation")
+    prepared = plan.nnunet_input_dir is not None
+    supplied = oriented.get("mask_spine" if prepared else "spine_segmentation")
     segmentation = supplied.ras if supplied is not None else None
-    reconstructions = {name: source.ras for name, source in oriented.items() if name != "spine_segmentation"}
-    if supplied is not None:
+    reconstructions = {name: source.ras for name, source in oriented.items() if name not in ("mask_spine", "spine_segmentation")}
+    if prepared:
+        validate_label_values(segmentation, "prepared binary spine mask", allow_empty=False, allowed_labels=(0, 1))
+    elif supplied is not None:
         validate_spine_segmentation(segmentation)
     reference_name = (plan.lesion_model.required_modalities[0] if supplied and plan.lesion_model else
                       "ConvCT" if "ConvCT" in oriented else "spine_segmentation")

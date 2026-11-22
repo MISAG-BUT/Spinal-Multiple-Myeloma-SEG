@@ -180,7 +180,7 @@ class SpineTests(unittest.TestCase):
         sentinel = self.output / "old_prediction.nii.gz"
         sentinel.write_bytes(b"preserve")
         result, installer = self.execute(self.plan())
-        installer.resolve.assert_called_once_with(802, spine_model_dir=None, allow_download=False)
+        installer.resolve.assert_called_once_with(802, spine_model_dir=None, allow_download=True)
         labelled = load_nifti(result / json.loads((result / "run.json").read_text())["labelled_output"])
         binary = load_nifti(result / json.loads((result / "run.json").read_text())["binary_output"])
         np.testing.assert_array_equal(labelled.dataobj, reference.dataobj)
@@ -236,6 +236,8 @@ class SpineTests(unittest.TestCase):
     def test_missing_model_never_downloads(self):
         self.save_ct()
         plan = self.plan()
+        from dataclasses import replace
+        plan = replace(plan, install_models=False, offline=True)
         installer = ModelInstaller(self.root / "missing cache", opener=Mock(side_effect=AssertionError("network forbidden")))
         with self.assertRaisesRegex(InstallationError, "--install_models"):
             run_spine_only(plan, validate_plan_inputs(plan), installer=installer)
@@ -345,6 +347,17 @@ sys.exit(cli(sys.argv[1:]))
         self.assertEqual((result / manifest["supplied_spine_copy"]).read_bytes(), original)
         self.assertEqual(source.read_bytes(), original)
 
+    def test_spine_only_intermediates_skip_ras_copies_and_lesion(self):
+        from dataclasses import replace
+        self.save_ct()
+        run, _ = self.execute(replace(self.plan(), keep_intermediates=True))
+        manifest = json.loads((run / "run.json").read_text())
+        self.assertEqual(len(manifest["intermediates"]), 4)
+        self.assertTrue(all(name.startswith("Intermediates/Spine_chunks/") for name in manifest["intermediates"]))
+        self.assertFalse((run / "Intermediates/RAS").exists())
+        self.assertFalse((run / "Intermediates/Lesion_crop").exists())
+        self.assertEqual(manifest["application_crop"], "not_applicable")
+
     def test_failed_publication_preserves_existing_destination(self):
         self.save_ct()
         from benchmark_model_installation import _publish_directory
@@ -373,6 +386,8 @@ sys.exit(cli(sys.argv[1:]))
             with patch("benchmark_spine_inference.ModelInstaller", return_value=installer), patch("benchmark_spine_inference.create_predictor", return_value=FakePredictor()):
                 self.assertEqual(cli(base), 0)
             with patch("benchmark_spine_inference.ModelInstaller", side_effect=InstallationError("missing model")):
+                self.assertEqual(cli(base), 4)
+            with patch("benchmark_spine_inference.ModelInstaller", side_effect=OSError("cache permission denied")):
                 self.assertEqual(cli(base), 4)
             with patch("benchmark_spine_inference.ModelInstaller", return_value=installer), patch("benchmark_spine_inference.create_predictor", side_effect=SpineInferenceError("missing dependencies")):
                 self.assertEqual(cli(base), 5)
