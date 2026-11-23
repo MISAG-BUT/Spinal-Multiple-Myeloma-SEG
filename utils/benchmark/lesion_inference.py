@@ -4,6 +4,7 @@ Registry metadata, V3 geometry/preparation, the Phase 4A spine adapter, and the
 verified installer remain authoritative. No Torch/nnU-Net imports occur here.
 """
 
+from dataclasses import dataclass
 from datetime import datetime, timezone
 import json
 from pathlib import Path
@@ -14,7 +15,7 @@ import numpy as np
 
 from .model_registry import get_lesion_model, SPINE_MODEL
 from .model_installation import (
-    ModelInstaller, InstallationError, validate_model, _read_json, _publish_directory,
+    ModelInstaller, InstallationError, ResolvedModel, validate_model, _read_json, _publish_directory,
 )
 from .nifti import (
     binary_spine_mask, compare_geometry, load_nifti, prepare_lesion_channels,
@@ -29,6 +30,17 @@ from .spine_inference import (
 
 class LesionInferenceError(RuntimeError):
     """Lesion prediction, reconstruction, or completed-run publication failed."""
+
+
+class PredictorExecutionError(LesionInferenceError):
+    """A predictor call failed, leaving its state unsafe to reuse."""
+
+
+@dataclass(frozen=True)
+class LesionSession:
+    resolved: ResolvedModel
+    dataset: dict
+    predictor: object
 
 
 def lesion_model_metadata(resolved, spec):
@@ -56,14 +68,32 @@ def validate_lesion_prediction(prediction, reference, dataset):
                                  allowed_labels=set(dataset["labels"].values()))
 
 
-def infer_lesions(prepared, resolved, work_dir, *, predictor_factory=None):
+def initialize_lesion_predictor(resolved, spec, predictor_factory=None):
+    predictor = (predictor_factory or create_lesion_predictor)()
+    try:
+        predictor.initialize_from_trained_model_folder(
+            str(resolved.model_directory), use_folds=spec.folds,
+            checkpoint_name=spec.checkpoint_filename,
+        )
+    except AssertionError as error:
+        raise LesionInferenceError("Lesion predictor initialization rejected the model: {}".format(error)) from error
+    trainer, _, configuration = spec.trainer_directory.split("__")
+    if getattr(predictor, "trainer_name", trainer) != trainer:
+        raise ValueError("Loaded lesion checkpoint trainer disagrees with registry")
+    manager = getattr(predictor, "configuration_manager", None)
+    if manager is not None and manager.configuration != predictor.plans_manager.get_configuration(configuration).configuration:
+        raise ValueError("Loaded lesion checkpoint configuration disagrees with registry")
+    return predictor
+
+
+def infer_lesions(prepared, resolved, work_dir, *, predictor_factory=None, session=None):
     """Execute one registry-ordered case with all five benchmark folds.
 
     Empty binary predictions are valid. Invalid labels are never binarized.
     """
     try:
         spec = get_lesion_model(resolved.dataset_id)
-        dataset = lesion_model_metadata(resolved, spec)
+        dataset = session.dataset if session is not None else lesion_model_metadata(resolved, spec)
         if prepared.channel_names != spec.channel_names or len(prepared.images) != len(spec.channel_names):
             raise ValueError("Prepared lesion channel count/order disagrees with registry")
         cropped_reference = prepared.images[0]
@@ -74,27 +104,19 @@ def infer_lesions(prepared, resolved, work_dir, *, predictor_factory=None):
         paths = save_prepared_channels(prepared, Path(work_dir) / "inputs")
         output = Path(work_dir) / "predictions"
         output.mkdir(exist_ok=False)
-        predictor = (predictor_factory or create_lesion_predictor)()
-        try:
-            predictor.initialize_from_trained_model_folder(
-                str(resolved.model_directory), use_folds=spec.folds,
-                checkpoint_name=spec.checkpoint_filename,
-            )
-        except AssertionError as error:
-            raise LesionInferenceError("Lesion predictor initialization rejected the model: {}".format(error)) from error
-        trainer, _, configuration = spec.trainer_directory.split("__")
-        if getattr(predictor, "trainer_name", trainer) != trainer:
-            raise ValueError("Loaded lesion checkpoint trainer disagrees with registry")
-        manager = getattr(predictor, "configuration_manager", None)
-        if manager is not None and manager.configuration != predictor.plans_manager.get_configuration(configuration).configuration:
-            raise ValueError("Loaded lesion checkpoint configuration disagrees with registry")
+        predictor = (session.predictor if session is not None else
+                     initialize_lesion_predictor(resolved, spec, predictor_factory))
         try:
             predictor.predict_from_files_sequential(
                 [[str(path) for path in paths]], [str(output / "case_0001")],
                 save_probabilities=False, overwrite=False, folder_with_segs_from_prev_stage=None,
             )
         except AssertionError as error:
-            raise LesionInferenceError("Lesion predictor rejected the inference request: {}".format(error)) from error
+            raise PredictorExecutionError("Lesion predictor rejected the inference request: {}".format(error)) from error
+        except Exception as error:
+            if session is None:
+                raise
+            raise PredictorExecutionError("Lesion predictor failed: {}".format(error)) from error
         prediction = load_nifti(output / "case_0001.nii.gz")
         return validate_lesion_prediction(prediction, cropped_reference, dataset)
     except LesionInferenceError:
@@ -114,7 +136,7 @@ def _model_provenance(resolved, spec):
 
 
 def run_lesion_pipeline(plan, validated_inputs, *, installer=None,
-                        spine_predictor_factory=None, lesion_predictor_factory=None):
+                        spine_predictor_factory=None, lesion_predictor_factory=None, lesion_session=None):
     """Preflight every model, then stage and publish one complete spine+lesion run."""
     if plan.lesion_model is None:
         raise ValueError("Select a lesion model for end-to-end lesion inference")
@@ -129,14 +151,20 @@ def run_lesion_pipeline(plan, validated_inputs, *, installer=None,
             raise ValueError("Missing required lesion modality: {}".format(name))
         compare_geometry(reference, reconstructions[name], name)
     # No predictor or patient output directory is created before both resolve.
-    try:
-        installer = installer or ModelInstaller(plan.cache_dir)
-        spine_model = installer.resolve(802, spine_model_dir=plan.spine_model_dir,
-                                        allow_download=plan.install_models) if segmentation is None else None
-        lesion_model = installer.resolve(spec.dataset_id, allow_download=plan.install_models)
-        lesion_model_metadata(lesion_model, spec)
-    except OSError as error:
-        raise InstallationError("Model preflight failed: {}".format(error)) from error
+    if lesion_session is not None:
+        if not prepared_input or segmentation is None or lesion_session.resolved.dataset_id != spec.dataset_id:
+            raise ValueError("Shared lesion predictor requires prepared inputs and the same model")
+        spine_model = None
+        lesion_model = lesion_session.resolved
+    else:
+        try:
+            installer = installer or ModelInstaller(plan.cache_dir)
+            spine_model = installer.resolve(802, spine_model_dir=plan.spine_model_dir,
+                                            allow_download=plan.install_models) if segmentation is None else None
+            lesion_model = installer.resolve(spec.dataset_id, allow_download=plan.install_models)
+            lesion_model_metadata(lesion_model, spec)
+        except OSError as error:
+            raise InstallationError("Model preflight failed: {}".format(error)) from error
     output = Path(plan.output_dir)
     output.mkdir(parents=True, exist_ok=True)
     with tempfile.TemporaryDirectory(prefix=".v3-lesion-", dir=str(output)) as temporary:
@@ -155,7 +183,7 @@ def run_lesion_pipeline(plan, validated_inputs, *, installer=None,
         prepared = prepare_lesion_channels(spec.dataset_id, reconstructions, labelled, reference,
                                            already_cropped=plan.already_cropped)
         cropped_prediction = infer_lesions(prepared, lesion_model, work / "lesion",
-                                           predictor_factory=lesion_predictor_factory)
+                                           predictor_factory=lesion_predictor_factory, session=lesion_session)
         if prepared.crop is None:
             lesions = image_on_reference_grid(np.asanyarray(cropped_prediction.dataobj).astype(np.uint8, copy=False), reference)
         else:

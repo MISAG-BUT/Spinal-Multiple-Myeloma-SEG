@@ -57,6 +57,11 @@ class ExecutionPlan:
     keep_intermediates: bool = False
 
 
+@dataclass(frozen=True)
+class PreparedBatch:
+    template: ExecutionPlan
+
+
 def build_parser():
     parser = argparse.ArgumentParser(
         description="V3 benchmark prediction (Phase 4B: spine and benchmark lesions)",
@@ -69,6 +74,7 @@ def build_parser():
                             help=f"{modality} file (.nii or .nii.gz); use explicit paths without --input_dir")
     inputs.add_argument("--nnunet_input_dir", type=Path, help="Prepared lesion channels, including the binary spine mask")
     inputs.add_argument("--nnunet_case_prefix", help="Filename prefix for prepared channels (default: data)")
+    inputs.add_argument("--batch", action="store_true", help="Discover and process all prepared nnU-Net cases")
     inputs.add_argument("--case_id", help="Case ID; defaults to the input folder name and is required without --input_dir")
     inputs.add_argument("--spine_segmentation", type=Path, help="Existing spine labels; skips model 802")
 
@@ -132,6 +138,15 @@ def validate_arguments(args):
     """Validate paths only, without reading NIfTI content or creating directories."""
     prepared = args.nnunet_input_dir is not None
     supplied = args.spine_segmentation is not None
+    if args.batch:
+        if not prepared:
+            raise ValueError("--batch requires --nnunet_input_dir")
+        if args.lesion_model is None:
+            raise ValueError("--batch requires an explicit --lesion_model")
+        if args.case_id is not None:
+            raise ValueError("--batch cannot be combined with --case_id")
+        if args.nnunet_case_prefix is not None:
+            raise ValueError("--batch cannot be combined with --nnunet_case_prefix")
     if args.output_dir is None:
         raise ValueError("--output_dir is required for prediction")
     if args.lesion_model is None and not args.skip_lesion_segmentation:
@@ -165,11 +180,20 @@ def validate_arguments(args):
     model = get_lesion_model(args.lesion_model) if args.lesion_model is not None else None
     allow_download = not (args.offline or args.validate_only)
     if prepared:
-        if args.case_id is None:
-            raise ValueError("--case_id is required with --nnunet_input_dir")
         directory = args.nnunet_input_dir
         if not directory.is_dir():
             raise ValueError(f"Prepared input directory does not exist: {directory}")
+        if args.batch:
+            if args.output_dir.resolve().is_relative_to(directory.resolve()):
+                raise ValueError("Batch output must be outside the prepared input directory")
+            return PreparedBatch(ExecutionPlan(
+                None, args.output_dir, model, None, None, args.cache_dir, None, (),
+                allow_download, args.validate_only, nnunet_input_dir=directory,
+                already_cropped=args.already_cropped, offline=args.offline,
+                keep_intermediates=args.keep_intermediates,
+            ))
+        if args.case_id is None:
+            raise ValueError("--case_id is required with --nnunet_input_dir")
         prefix = validate_case_id(args.nnunet_case_prefix if args.nnunet_case_prefix is not None else "data")
         return ExecutionPlan(None, args.output_dir, model, None, None, args.cache_dir, None,
                              _prepared_channels(directory, model, prefix),
@@ -249,6 +273,9 @@ def cli(argv=None):
         for model_id in ([802, *sorted(LESION_MODELS)] if plan.list_models else [plan.model_info]):
             _show_model(get_model(model_id), not plan.list_models)
         return 0
+    if isinstance(plan, PreparedBatch):
+        from utils.benchmark.batch_inference import run_batch
+        return run_batch(plan.template, validate_case_id, prepared_filenames)
     try:
         from utils.benchmark.model_installation import cache_location
         cache, source = cache_location(plan.cache_dir)

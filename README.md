@@ -51,7 +51,7 @@ The [TCIA dataset](https://doi.org/10.7937/k4qv-hh78) contains 72 dual-energy CT
 |---|---|---|---|
 | [V1 · TCIA dataset segmentation](docs/V1_TCIA_prediction.md) | DICOM | Original | Convert TCIA series and segment spine and lesions |
 | [V2 · New data segmentation](docs/V2_new_data_prediction.md) | Aligned RAS NIfTI | Original | Segment custom ConvCT and VMI 40 keV pairs |
-| [V3 · Benchmark model segmentation](docs/V3_benchmark_prediction.md) | Aligned NIfTI | Spine 802 and benchmark lesion 700–718 | Select spectral reconstructions and run spine, lesion or combined prediction |
+| [V3 · Benchmark model segmentation](docs/V3_benchmark_prediction.md) | Aligned NIfTI | Spine 802 and benchmark lesion 700–718 | Select spectral reconstructions and run spine, lesion or combined prediction. Prepared lesion inputs also support batch mode. |
 | [Dataset Viewer](docs/Dataset_viewer.md) | DICOM and NIfTI masks | None | Explore TCIA reconstructions and segmentation overlays in napari |
 
 V1, V2 and V3 are workflow names. See the [Model Zoo](docs/Model_zoo.md) for the manually installed original checkpoints, V3 automatic downloads, and the exact channel order for each benchmark model.

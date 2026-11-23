@@ -2,7 +2,7 @@
 
 [Back to main README](../README.md)
 
-[Pipeline](#pipeline) · [Inputs](#input-data) · [Running V3](#running-v3) · [CLI reference](#command-line-reference) · [Cache](#model-installation-and-cache) · [Outputs](#output-structure) · [Troubleshooting](#limitations-and-troubleshooting)
+[Pipeline](#pipeline) · [Inputs](#input-data) · [Running V3](#running-v3) · [Prepared batches](#prepared-batches) · [CLI reference](#command-line-reference) · [Cache](#model-installation-and-cache) · [Outputs](#output-structure) · [Troubleshooting](#limitations-and-troubleshooting)
 
 V3 applies 19 spectral lesion models to aligned dual-energy CT NIfTI data. It can predict the spine with model 802, predict lesions using supplied spine information or run both steps together. V3 handles orientation and manages required model downloads. The [Model Zoo](Model_zoo.md) lists exactly which reconstructions each checkpoint requires.
 
@@ -36,7 +36,7 @@ Choose one input form:
 
 - **Standard directory:** use these exact, case-sensitive filenames. Include ConvCT for automatic spine prediction and the modalities required by the lesion model. The directory basename is the default case ID.
 - **Explicit paths:** pass one `.nii` or `.nii.gz` file per required modality. Include `--case_id`. Unused explicit reconstructions are rejected. A supplied-mask spine-only run can accept optional ConvCT as its reference.
-- **Prepared nnU-Net channels:** `--nnunet_input_dir` requires a lesion model and explicit case ID. Supply exactly one file per channel as `<prefix>_0000.nii.gz`, `<prefix>_0001.nii.gz` and so on, using `data` as the default prefix. Files under that prefix must match the exact expected suffixes and resolve to distinct input paths. Follow [the model-specific order](Model_zoo.md#exact-channel-order). The final channel must be a nonempty binary mask with values 0 and 1. This mode bypasses model 802.
+- **Prepared nnU-Net channels:** `--nnunet_input_dir` requires a lesion model. For a single case, pass an explicit case ID. Supply exactly one file per channel as `<prefix>_0000.nii.gz`, `<prefix>_0001.nii.gz` and so on, using `data` as the default prefix. Files under that prefix must match the exact expected suffixes and resolve to distinct input paths. Follow [the model-specific order](Model_zoo.md#exact-channel-order). The final channel must be a nonempty binary mask with values 0 and 1. This mode bypasses model 802.
 
 Case IDs and prepared channel prefixes accept 1–80 ASCII letters, digits, underscores or hyphens, starting with a letter or digit. Windows device names such as `CON` and `LPT1` are rejected.
 
@@ -138,6 +138,34 @@ uv run --locked spinal-run-nnunet-benchmark-prediction \
   --case_id Myel_001 --output_dir /path/to/output --lesion_model 710
 ```
 
+## Prepared batches
+
+Use `--batch` with `--nnunet_input_dir` and one explicit `--lesion_model` to process every prepared case in a directory. Omit `--case_id` and `--nnunet_case_prefix`. For a single case in a shared directory, omit `--batch` and select its prefix explicitly.
+
+The final underscore and four-digit channel index delimit the case ID. For 709, `case_A_0000.nii.gz` is ConvCT and `case_A_0001.nii.gz` is its binary spine mask. The same pattern applies to a second case, such as `Myel-002_followup`. For 717, prepare `0000` = VMI 40, `0001` = VMI 80, `0002` = VMI 120, and `0003` = binary spine mask for each case. See the [exact channel order](Model_zoo.md#exact-channel-order) for every model.
+
+Batch discovery checks all NIfTI entries at the top level, including incomplete cases without channel `0000`. Other file types are ignored. A malformed name, unexpected index, missing channel, unsafe ID, case-only name collision or aliased channel file fails preflight. The output and model cache must be outside the input directory. Each complete case is validated independently for orientation, geometry and mask values before models are resolved. Preflight prints discovered, valid and invalid counts, identifying malformed filenames individually when no case ID can be inferred.
+
+```bash
+uv run --locked spinal-run-nnunet-benchmark-prediction \
+  --nnunet_input_dir /path/to/prepared-709 --lesion_model 709 \
+  --output_dir /path/to/results --batch --validate_only
+
+uv run --locked spinal-run-nnunet-benchmark-prediction \
+  --nnunet_input_dir /path/to/prepared-709 --lesion_model 709 \
+  --output_dir /path/to/results --batch --offline
+
+uv run --locked spinal-run-nnunet-benchmark-prediction \
+  --nnunet_input_dir /path/to/cropped-717 --lesion_model 717 \
+  --output_dir /path/to/results --batch --already_cropped --keep_intermediates
+```
+
+The first command returns 3 on successful validation with no weights, output directories or reports. An invalid case fails the entire preflight with code 2. The inference commands run in sorted case-ID order with one verified lesion model and one initialized sequential predictor. They bypass model 802. Only one patient's image arrays are held at a time. Without `--offline`, missing required weights are installed before prediction.
+
+Each completed prediction uses the normal per-case structure and manifest. The batch publishes `batch_run.json` beside the case directories, including the batch ID, model and channels, timing, settings, counts, per-case statuses, diagnostics and actual published paths. A case-local error during preparation, output validation or publication can leave that case failed and allow the next case to run. A predictor exception stops the batch and marks remaining cases unprocessed. Any partial or aborted batch returns nonzero. Published successes remain available.
+
+Repeat executions use `<case>_output_v2/`, `<case>_output_v3/` and similarly `batch_run_v2.json`, `batch_run_v3.json`. The next version advances above the highest existing numeric version. Earlier outputs are preserved.
+
 ## Command-line reference
 
 ### Case and input paths
@@ -145,11 +173,12 @@ uv run --locked spinal-run-nnunet-benchmark-prediction \
 | Argument | Value | Default and constraints |
 |---|---|---|
 | `--input_dir` | Directory | None. Exact filenames from [Input data](#input-data). Exclusive with explicit and prepared input forms. |
-| `--case_id` | Case identifier | Standard input directory basename. Required for explicit or prepared inputs. |
+| `--case_id` | Case identifier | Standard input directory basename. Required for explicit or single-case prepared inputs. Omit with `--batch`. |
 | Eight modality options | One `.nii` or `.nii.gz` path per option | None. See [the complete argument and filename table](#input-data). Supply only the required reconstructions. |
 | `--spine_segmentation` | Labelled spine NIfTI | None. Bypasses 802, requires an aligned, nonempty label mask. Conflicts with prepared inputs, `--spine_model_dir` and an explicit `--split`. |
-| `--nnunet_input_dir` | Directory | None. Requires a lesion model and case ID. Conflicts with standard or explicit input paths, supplied spine labels, external spine models and explicit splitting. |
-| `--nnunet_case_prefix` | Filename prefix | `data`. Only for prepared inputs. |
+| `--nnunet_input_dir` | Directory | None. Requires a lesion model and either a case ID or `--batch`. Conflicts with standard or explicit input paths, supplied spine labels, external spine models and explicit splitting. |
+| `--nnunet_case_prefix` | Filename prefix | `data`. Only for a single prepared case. |
+| `--batch` | Flag | Off. Requires prepared inputs and a lesion model. Rejects explicit case ID and prefix. |
 | `--already_cropped` | Flag | Off. Only for prepared inputs. Skips the application crop and full-volume restoration. |
 
 ### Prediction and output
@@ -222,7 +251,7 @@ output/<case>_output/
 
 Automatic spine runs use the original ConvCT as reference. With supplied spine and lesion modes, the first CT modality required by the lesion model is the reference. Supplied spine-only uses ConvCT if present, otherwise the mask. Prepared channels use their first CT modality. Final published masks restore the reference shape and orientation, affine, spacing, and qform/sform transforms and codes. With already cropped data this applies to the supplied cropped grid. The original supplied copy is preserved independently.
 
-V3 stages a complete case before atomic publication. A name collision at `<case>_output` causes a retry with a unique suffix and the previous run remains in place. The filesystem must support the required exclusive rename. This differs from the working-directory replacement performed by V1 and V2.
+V3 stages a complete case before atomic publication. The first run uses `<case>_output`. Later runs use `<case>_output_v2`, `<case>_output_v3` and higher versions without filling gaps. On a concurrent collision V3 retries with the next version. Existing results, including older UUID-suffixed runs, remain in place. The filesystem must support the required exclusive rename. This differs from the working-directory replacement performed by V1 and V2.
 
 ## Limitations and troubleshooting
 
@@ -238,6 +267,10 @@ V3 stages a complete case before atomic publication. A name collision at `<case>
 
 Execution returns `0` on success, `2` for argument or input errors, `3` for a successful validation-only plan, `4` for model resolution errors and `5` for prediction or publication failures.
 
-Automated coverage includes input handling, registry configurations, cache and publication behavior. Real end-to-end regression covered models 802 → 710. The remaining lesion configurations have not all been run end to end in this setup. Technical agreement on a reference examination does not establish clinical performance or the number of clinically confirmed lesions.
+### Regression verification
+
+The Linux test suite covers input handling, registry configurations, model cache, failure recovery, exact published file trees and concurrent version allocation. The repository owner completed ten manual V3 scenarios covering automatic spine and lesion inference, spine-only and supplied-spine inference, standard and explicit input paths, and prepared single-case and batch inputs with and without the application crop. Real GPU tests exercised spine model 802 and lesion models 709, 710, 711 and 717. The other registry configurations were not individually tested on a GPU during this implementation. Windows and exFAT were not newly tested for batch mode.
+
+In the tested already-cropped 709 runs, four single-case or repeated-batch comparisons had zero differing voxels and identical geometry. The standard-directory and explicit-input runs preserved geometry but differed by up to 101 voxels across their masks, with foreground Dice above 0.9999. The exact source of these small differences was not isolated. These technical comparisons establish neither deterministic inference nor clinical accuracy.
 
 [Installation](Installation.md) · [Model Zoo](Model_zoo.md) · [Original NIfTI workflow](V2_new_data_prediction.md) · [Dataset Viewer](Dataset_viewer.md)

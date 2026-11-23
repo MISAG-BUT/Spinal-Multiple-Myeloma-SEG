@@ -11,9 +11,9 @@ from pathlib import Path
 import ctypes
 import errno
 import os
+import re
 import sys
 import tempfile
-import uuid
 from typing import Optional, Tuple
 
 import nibabel as nib
@@ -420,15 +420,30 @@ def case_output_paths(plan):
     return {key: path.as_posix() for key, path in paths.items()}
 
 
+MAX_PUBLICATION_ATTEMPTS = 32
+
+
+def publish_versioned(stage, output, stem, suffix, publish):
+    """Publish exclusively, advancing above the highest numeric version on collision."""
+    pattern = re.compile(rf"{re.escape(stem)}_v([0-9]+){re.escape(suffix)}")
+    version = 1
+    for attempt in range(MAX_PUBLICATION_ATTEMPTS):
+        matches = (pattern.fullmatch(path.name) for path in output.iterdir())
+        highest = max((int(match[1]) for match in matches if match), default=0)
+        version = max(version, highest + 1)
+        name = stem if version == 1 else f"{stem}_v{version}"
+        destination = output / f"{name}{suffix}"
+        try:
+            publish(stage, destination)
+            return destination
+        except FileExistsError:
+            if attempt == MAX_PUBLICATION_ATTEMPTS - 1:
+                raise
+            version += 1
+
+
 def publish_case_run(stage, output, case_id, publish):
-    """Prefer the legacy-shaped name, then retry a collision with a unique suffix."""
-    destination = output / f"{case_id}_output"
-    try:
-        publish(stage, destination)
-    except FileExistsError:
-        destination = output / f"{case_id}_output-{uuid.uuid4().hex}"
-        publish(stage, destination)
-    return destination
+    return publish_versioned(stage, output, f"{case_id}_output", "", publish)
 
 
 def image_geometry(image):

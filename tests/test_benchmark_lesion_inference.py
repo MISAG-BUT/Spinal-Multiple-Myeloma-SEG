@@ -333,7 +333,7 @@ class LesionTests(unittest.TestCase):
         self.assertEqual(set(map(str, original)), {"run.json", *expected.values()})
         self.assertEqual((first / expected["supplied_spine_copy"]).read_bytes(), source.read_bytes())
         second, _ = self.run_pipeline(plan)
-        self.assertRegex(second.name, r"^Myel_001_output-[0-9a-f]{32}$")
+        self.assertEqual(second.name, "Myel_001_output_v2")
         self.assertEqual(original, {p.relative_to(first): p.read_bytes() for p in first.rglob("*") if p.is_file()})
 
     def test_automatic_preflight_resolves_both_before_predictor(self):

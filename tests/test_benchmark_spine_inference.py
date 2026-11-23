@@ -15,7 +15,9 @@ import numpy as np
 
 from utils.benchmark.model_installation import InstallationError, ModelInstaller, ResolvedModel
 from utils.benchmark.model_registry import SPINE_MODEL
-from utils.benchmark.nifti import _new_image, compare_geometry, load_nifti, validate_plan_inputs
+from utils.benchmark.nifti import (
+    MAX_PUBLICATION_ATTEMPTS, _new_image, compare_geometry, load_nifti, validate_plan_inputs,
+)
 from utils.benchmark.spine_inference import (
     SpineInferenceError, create_predictor, infer_spine, run_spine_only, split_crops, validate_labels,
 )
@@ -368,7 +370,7 @@ sys.exit(cli(sys.argv[1:]))
         with patch("utils.benchmark.spine_inference._publish_directory", side_effect=publish), self.assertRaises(FileExistsError):
             self.execute(self.plan())
         runs = list(self.output.iterdir())
-        self.assertEqual(len(runs), 2)
+        self.assertEqual(len(runs), MAX_PUBLICATION_ATTEMPTS)
         for run in runs:
             self.assertEqual((run / "sentinel").read_bytes(), b"existing output")
             self.assertFalse((run / "run.json").exists())
@@ -438,7 +440,7 @@ sys.exit(cli(sys.argv[1:]))
                 error = io.StringIO()
                 with patch("utils.benchmark.spine_inference.ModelInstaller", return_value=installer), patch("utils.benchmark.spine_inference.create_predictor", return_value=FakePredictor()), patch("utils.benchmark.spine_inference._publish_directory", side_effect=publish), contextlib.redirect_stdout(io.StringIO()), contextlib.redirect_stderr(error):
                     self.assertEqual(cli(arguments), 5)
-                self.assertEqual(len(destinations), 2 if failure == "collision" else 1)
+                self.assertEqual(len(destinations), MAX_PUBLICATION_ATTEMPTS if failure == "collision" else 1)
                 self.assertEqual((destinations[0] / "existing.txt").read_bytes(), b"existing output")
                 self.assertFalse((destinations[0] / "run.json").exists())
                 self.assertFalse(list(self.output.glob(".v3-*")))
